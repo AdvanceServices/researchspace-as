@@ -154,7 +154,10 @@ export class TemplateItem extends Component<TemplateItemProps, State> {
       .compile(props.template.source)
       // parse to react, but do not omit whitespaces
       .then((template) => {
-        const renderedHtml = template(props.template.options, { capturer, parentContext: templateDataContext });
+        const renderedHtml = template(props.template.options, { capturer, parentContext: templateDataContext })
+	  .replace("&#x3D;", "=")
+	  .replace("&#x27;", "'")
+	  .replace("&amp;", "&");
         return ModuleRegistry.parseHtmlToReact(renderedHtml);
       })
       .then((parsedTemplate) => {
