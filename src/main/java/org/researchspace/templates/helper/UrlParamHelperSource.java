@@ -54,7 +54,7 @@ public class UrlParamHelperSource {
                     String params = StringUtils.join(e.getValue(), ",");
                     logger.trace("Extracted requested url param with name {}: {}", paramName, params);
                     if (escape) {
-                        return new Handlebars.SafeString(StringEscapeUtils.escapeHtml4(params).toString()).toString();
+                        return new Handlebars.SafeString(StringEscapeUtils.escapeHtml4(params).toString().replace("'", "&apos;")).toString();
                     } else {
                         return params;
                     }
