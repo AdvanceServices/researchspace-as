@@ -29,6 +29,7 @@ export interface Resource {
   readonly label: string;
   readonly description?: string;
   readonly tuple: SparqlClient.Binding;
+  readonly count?: number;
 }
 export type Resources = OrderedMap<Rdf.Iri, Resource>;
 

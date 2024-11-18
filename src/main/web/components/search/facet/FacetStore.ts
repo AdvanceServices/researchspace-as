@@ -571,6 +571,7 @@ export class FacetStore {
             iri: value.iri,
             label,
             description: label,
+            count: value.count,
             tuple: value.tuple,
           };
         })
@@ -598,13 +599,14 @@ export class FacetStore {
             FACET_VARIABLES.VALUE_RESOURCE_LABEL_VAR in binding
               ? binding[FACET_VARIABLES.VALUE_RESOURCE_LABEL_VAR].value
               : undefined,
+          count: 'count' in binding ? parseInt(binding['count'].value) : undefined,
           tuple: binding,
         }))
       )
       .flatMap((values) => this.augmentWithLabelsFromServiceIfNeeded(values))
       // This seems to force order by label
-      // Commenting out this line will preserve the order of the values as they were returned by the query
-      // .map((values) => _.sortBy(values, (v) => v.label))
+      // Sort by count order
+      .map((values) =>  values.slice().sort((a,b) => b.count - a.count))
       .toProperty();
   }
 
