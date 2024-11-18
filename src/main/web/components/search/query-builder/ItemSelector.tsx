@@ -72,6 +72,12 @@ class StackSelector extends Component<Props, StackSelectorState> {
 
   render() {
     const { tupleTemplate, className, resources, actions, itemClassName, label } = this.props;
+
+    let role = "option"
+    if (label === "search range category selection") {
+      role = "range category option"
+    }
+
     const fcButtons = resources.map((resource) => (
       <li
         key={resource.iri.value}
@@ -79,7 +85,7 @@ class StackSelector extends Component<Props, StackSelectorState> {
         className={classnames('btn', styles.itemHolder, itemClassName)}
         tabIndex={0}
         aria-label={resource.label}
-        role="option"
+        role={role}
         onMouseOver={() => this.focusItem(resource)}
         onClick={(event) => this.props.actions.selectResource(resource)}
       >
