@@ -602,7 +602,9 @@ export class FacetStore {
         }))
       )
       .flatMap((values) => this.augmentWithLabelsFromServiceIfNeeded(values))
-      .map((values) => _.sortBy(values, (v) => v.label))
+      // This seems to force order by label
+      // Commenting out this line will preserve the order of the values as they were returned by the query
+      // .map((values) => _.sortBy(values, (v) => v.label))
       .toProperty();
   }
 
