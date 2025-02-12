@@ -35,6 +35,8 @@ import { ControlledPropsHandler } from 'platform/components/utils';
 import { ErrorNotification } from 'platform/components/ui/notification';
 
 import { ColumnConfiguration, Table, TableConfig, TableLayout } from './Table';
+import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
+import { Pattern } from 'sparqljs';
 
 interface ControlledProps {
   /**
@@ -49,6 +51,8 @@ interface TableState {
   isLoading?: boolean;
   currentPage?: number;
   error?: any;
+  filters: { filter: string; variableName: string }[];
+  queryDebounce: ReturnType<typeof setTimeout> | null;
 }
 
 interface Options {
@@ -180,6 +184,8 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     this.state = {
       isLoading: true,
       currentPage: props.currentPage ? props.currentPage : 0,
+      filters: [],
+      queryDebounce: null,
     };
   }
 
@@ -196,9 +202,8 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
 
   public componentWillReceiveProps(nextProps: SemanticTableProps, context: ComponentContext) {
     if (nextProps.query !== this.props.query) {
-
       // we need to reset currentPage when we receive new query when component is used in semantic-search.
-      this.prepareConfigAndExecuteQuery({...nextProps, currentPage: 0}, context);
+      this.prepareConfigAndExecuteQuery({ ...nextProps, currentPage: 0 }, context);
     }
   }
 
@@ -218,11 +223,22 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
         { className: 'semantic-table-holder' },
         this.state.isLoading
           ? createElement(Spinner)
-          : this.state.data && !SparqlUtil.isSelectResultEmpty(this.state.data)
-          ? this.renderTable()
-          : createElement(TemplateItem, { template: { source: this.props.noResultTemplate } })
+          : this.renderTable()
       );
     }
+  }
+
+  private handleFilterChange(filter: string, variableName: string) {
+    clearTimeout(this.state.queryDebounce);
+    this.setState((state) => {
+      const newFilters = state.filters
+        .filter((f) => f.variableName !== variableName)
+        .concat({ filter, variableName: variableName });
+      return {
+        filters: newFilters,
+        queryDebounce: setTimeout(() => this.prepareConfigAndExecuteQuery(this.props, this.context, newFilters), 1500),
+      };
+    });
   }
 
   private renderTable() {
@@ -236,10 +252,12 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     const { onControlledPropChange, ...otherProps } = this.props;
     const controlledProps: Partial<TableConfig> = {
       currentPage: this.state.currentPage,
-      onPageChange: onControlledPropChange ? (page) => {
-        this.setState({currentPage: page});
-        onControlledPropChange({ currentPage: page });
-      } : undefined,
+      onPageChange: onControlledPropChange
+        ? (page) => {
+            this.setState({ currentPage: page });
+            onControlledPropChange({ currentPage: page });
+          }
+        : undefined,
     };
     return createElement(Table, {
       ...otherProps,
@@ -248,18 +266,49 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       numberOfDisplayedRows: maybe.fromNullable(this.props.numberOfDisplayedRows),
       data: Either.Right<any[], SparqlClient.SparqlSelectResult>(this.state.data),
       ref: this.TABLE_REF,
+      filters: this.state.filters,
+      handleFilterChange: (filter, variableName) => this.handleFilterChange(filter, variableName),
     });
   }
 
-  private prepareConfigAndExecuteQuery = (props: SemanticTableProps, context: ComponentContext) => {
+  private prepareConfigAndExecuteQuery = (
+    props: SemanticTableProps,
+    context: ComponentContext,
+    filters?: { filter: string; variableName: string }[]
+  ) => {
     this.setState({
       isLoading: true,
       error: undefined,
       currentPage: props.currentPage,
     });
+    const parsedQuery = parseQuerySync(props.query);
+    if (parsedQuery.type === 'query' && parsedQuery.queryType === 'SELECT') {
+      parsedQuery.limit = props.numberOfDisplayedRows ?? 10;
+      parsedQuery.offset = (props.numberOfDisplayedRows ?? 10) * (props.currentPage ?? 0);
+
+      if (filters) {
+        filters
+          .filter((f) => f.filter !== '')
+          .forEach((f) => {
+            parsedQuery.where.push({
+              type: 'bgp',
+              triples: [
+                { subject: `?${f.variableName}_search`, predicate: 'http://www.bigdata.com/rdf/search#search', object: `"${f.filter}"` },
+                { subject: `?${f.variableName}_search`, predicate: 'http://www.bigdata.com/rdf/search#matchAllTerms', object: `"true"` },
+                {
+                  subject: `?${f.variableName}`,
+                  predicate: 'http://www.w3.org/2000/01/rdf-schema#label',
+                  object: `?${f.variableName}_search`,
+                },
+              ],
+            });
+          });
+      }
+    }
+
     this.querying = this.cancellation.deriveAndCancel(this.querying);
     const loading = this.querying
-      .map(SparqlClient.select(props.query, { context: context.semanticContext }))
+      .map(SparqlClient.select(parsedQuery, { context: context.semanticContext }))
       .onValue((res) => this.setState({ data: res, isLoading: false }))
       .onError((error) => this.setState({ isLoading: false, error }))
       .onEnd(() => {

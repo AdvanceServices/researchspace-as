@@ -39,6 +39,8 @@ import { Pagination, CustomPaginationProps } from './Pagination';
 import { RdfValueDisplay } from './RdfValueDisplay';
 
 import './Table.scss';
+import SortingCell from './SortingCell';
+import { ColumnSizer } from 'react-virtualized';
 
 export interface TableLayout {
   options?: Griddle.GriddleConfig;
@@ -102,6 +104,8 @@ export interface TableConfig {
   showLiteralDatatype?: boolean;
   linkParams?: {};
   showCopyToClipboardButton?: boolean;
+  filters: { filter: string; variableName: string }[];
+  handleFilterChange: (filter: string, variableName: string) => void;
 }
 
 export type TableProps = TableConfig & ClassAttributes<Table>;
@@ -212,6 +216,7 @@ export class Table extends Component<TableProps, State> {
       customPagerComponentOptions: paginationProps,
       useCustomFilterer: true,
       customFilterer: makeCellFilterer(renderingState),
+      // useExternal: true,
     };
 
     let griddleConfig = config.data.fold<ExtendedGriddleConfig>(
@@ -375,6 +380,11 @@ export class Table extends Component<TableProps, State> {
           visible: true,
           order: index,
           customComponent: this.makeCellTemplateComponent(undefined, renderingState),
+          customHeaderComponent: this.makeHeaderComponent(
+            columnConfig.displayName,
+            varName,
+            (filter) => this.props.handleFilterChange(filter, columnConfig.variableName)
+          ),
           customCompareFn: makeNullableLastComparator(makeCellComparator(renderingState)),
         };
       }
@@ -395,6 +405,11 @@ export class Table extends Component<TableProps, State> {
           displayName: columnConfig.displayName,
           variableName: columnConfig.variableName,
           customComponent: this.makeCellComponentClass(columnConfig, renderingState),
+          customHeaderComponent: this.makeHeaderComponent(
+            columnConfig.displayName,
+            columnConfig.variableName,
+            (filter) => this.props.handleFilterChange(filter, columnConfig.variableName)
+          ),
           visible: true,
           order: i,
           customCompareFn: makeNullableLastComparator(makeCellComparator(renderingState)),
@@ -433,9 +448,24 @@ export class Table extends Component<TableProps, State> {
     }
   }
 
+  private makeHeaderComponent(
+    columnName: string,
+    variableName: string,
+    onFilterChange: (filter: string) => void
+  ): ComponentClass<any> {
+    // eslint-disable-next-line
+    const val = this.props.filters.find(f => f.variableName === variableName)?.filter ?? "";
+    return class extends Component<any, {}> {
+      render(): ReactElement<any> {
+        return createElement(SortingCell, { type: 'text', name: columnName, onFilterChange, value: val });
+      }
+    };
+  }
+
   private makeCellTemplateComponent(template: string | undefined, renderingState: RenderingState): ComponentClass<any> {
     const { showLiteralDatatype, linkParams, showCopyToClipboardButton } = this.props;
     const templateSource = _.isString(template) ? String(template) : undefined;
+    // eslint-disable-next-line
     return class extends Component<CellRendererProps, {}> {
       render(): ReactElement<any> {
         if (_.isUndefined(templateSource) === false) {
