@@ -40,7 +40,6 @@ import { RdfValueDisplay } from './RdfValueDisplay';
 
 import './Table.scss';
 import SortingCell from './SortingCell';
-import { ColumnSizer } from 'react-virtualized';
 
 export interface TableLayout {
   options?: Griddle.GriddleConfig;
@@ -100,6 +99,8 @@ export interface TableConfig {
   layout?: Data.Maybe<TableLayout>;
   data: Data.Either<ReadonlyArray<any>, SparqlClient.SparqlSelectResult>;
   currentPage?: number;
+  maxPage?: number;
+  handleSearchChange: (query: string) => void;
   onPageChange?: (page: number) => void;
   showLiteralDatatype?: boolean;
   linkParams?: {};
@@ -216,7 +217,13 @@ export class Table extends Component<TableProps, State> {
       customPagerComponentOptions: paginationProps,
       useCustomFilterer: true,
       customFilterer: makeCellFilterer(renderingState),
-      // useExternal: true,
+      useExternal: true,
+      externalCurrentPage: config.currentPage ?? 0,
+      externalMaxPage: 9999,
+      externalSetPageSize: () => null,
+      externalSetFilter: (searchFilter: string) => config.handleSearchChange(searchFilter),
+      externalChangeSort: (...args) => { console.log(args);},
+      externalSetPage: (idx: number) => config.onPageChange(idx),
     };
 
     let griddleConfig = config.data.fold<ExtendedGriddleConfig>(

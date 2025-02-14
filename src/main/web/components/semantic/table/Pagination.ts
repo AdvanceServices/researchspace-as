@@ -77,55 +77,39 @@ export class Pagination extends Component<PaginationProps, {}> {
   }
 
   render() {
-    if (this.props.maxPage > 1) {
-      var previous = D.li(
+    const previous = D.li(
+      {
+        className: this.props.currentPage == 0 ? 'disabled' : '',
+      },
+      D.a(
         {
-          className: this.props.currentPage == 0 ? 'disabled' : '',
+          onClick: this.props.previous,
         },
-        D.a(
-          {
-            onClick: this.props.previous,
-          },
-          D.span({}, '\xAB')
-        )
-      );
+        D.span({}, '\xAB')
+      )
+    );
 
-      var next = D.li(
+    const next = D.li(
+      {
+        className: this.props.currentPage == this.props.maxPage - 1 ? 'disabled' : '',
+      },
+      D.a(
         {
-          className: this.props.currentPage == this.props.maxPage - 1 ? 'disabled' : '',
+          onClick: this.props.next,
         },
-        D.a(
+        D.span({}, '\xBB')
+      )
+    );
+
+    const options = [
+      D.li(
           {
-            onClick: this.props.next,
+            className: 'active',
           },
-          D.span({}, '\xBB')
+          D.a({ 'data-value': this.props.currentPage, onClick: this.pageChange } as any, this.props.currentPage + 1)
         )
-      );
+    ];
 
-      var startIndex = Math.max(this.props.currentPage - 5, 0);
-      var endIndex = Math.min(startIndex + 11, this.props.maxPage);
-
-      if (this.props.maxPage >= 11 && endIndex - startIndex <= 10) {
-        startIndex = endIndex - 11;
-      }
-
-      var options = [];
-      for (var i = startIndex; i < endIndex; i++) {
-        var selected = this.props.currentPage == i ? 'active' : '';
-        options.push(
-          D.li(
-            {
-              key: i,
-              className: selected,
-            },
-            D.a({ 'data-value': i, onClick: this.pageChange } as any, i + 1)
-          )
-        );
-      }
-
-      return D.nav({}, D.ul({ className: 'pagination' }, previous, options, next));
-    } else {
-      return D.nav({});
-    }
+    return D.nav({}, D.ul({ className: 'pagination' }, previous, options, next));
   }
 }
