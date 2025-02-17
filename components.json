@@ -3,6 +3,7 @@
   "semantic-link-container": "platform/api/navigation/components/ResourceLinkContainer.ts",
 
   "semantic-table": "platform/components/semantic/table/SemanticTable.ts",
+  "server-side-semantic-table": "platform/components/semantic/table/ServerSideSemanticTable.ts",
   "semantic-table-row-selection": "platform/components/semantic/table/TableSelectionComponent.ts",
 
   "semantic-query": "platform/components/semantic/query/SemanticQuery.ts",
@@ -38,6 +39,7 @@
   "semantic-search-table-result": "platform/components/semantic/search/web-components/SemanticSearchTableResult.tsx",
 
   "semantic-simple-search": "platform/components/semantic/simple-search/SimpleSearch.ts",
+  "composable-search": "platform/components/semantic/composable-search/ComposableSearch.ts",
 
   "semantic-if": "platform/components/semantic/conditional/SemanticIf.tsx",
   "semantic-switch": "platform/components/semantic/conditional/SemanticSwitch.tsx",

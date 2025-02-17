@@ -104,7 +104,7 @@ export class Pagination extends Component<PaginationProps, {}> {
     const options = [
       D.li(
           {
-            className: 'active',
+            className: 'active active-page',
           },
           D.a({ 'data-value': this.props.currentPage, onClick: this.pageChange } as any, this.props.currentPage + 1)
         )

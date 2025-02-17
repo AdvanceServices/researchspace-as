@@ -3,10 +3,9 @@ import { Props } from 'react';
 import * as React from 'react';
 
 export interface SortingCellProps extends Props<SortingCell> {
-  type: string;
   name: string;
   value: string;
-  onFilterChange: (filter: string) => void;
+  onFilterChange: (value: string) => void;
 }
 
 interface State {

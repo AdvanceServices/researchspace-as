@@ -24,3 +24,7 @@
   justify-content: flex-start;
   flex-wrap: wrap;
 }
+
+.active-page > a {
+  background: unset !important;
+}

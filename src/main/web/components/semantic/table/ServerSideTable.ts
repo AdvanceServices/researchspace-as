@@ -39,6 +39,10 @@ import { Pagination, CustomPaginationProps } from './Pagination';
 import { RdfValueDisplay } from './RdfValueDisplay';
 
 import './Table.scss';
+import SortingCell from './SortingCell';
+import SortingCellDate from './SortingCellDate';
+import { Filter } from './ServerSideSemanticTable';
+import CustomGriddle from './CustomGriddle';
 
 export interface TableLayout {
   options?: Griddle.GriddleConfig;
@@ -85,6 +89,8 @@ export interface ColumnConfiguration {
 
 export interface TableColumnConfiguration extends ColumnConfiguration {
   cellComponent?: ComponentClass<CellRendererProps>;
+  filterType?: 'text' | 'date';
+  variableType?: 'literal' | 'uri';
 }
 
 export interface CellRendererProps {
@@ -93,15 +99,25 @@ export interface CellRendererProps {
 }
 
 export interface TableConfig {
+  isLoading: boolean;
   columnConfiguration?: Array<TableColumnConfiguration>;
   numberOfDisplayedRows: Data.Maybe<number>;
   layout?: Data.Maybe<TableLayout>;
   data: Data.Either<ReadonlyArray<any>, SparqlClient.SparqlSelectResult>;
   currentPage?: number;
+  maxPage?: number;
+  searchQuery: string;
+  handleSearchChange: (query: string) => void;
   onPageChange?: (page: number) => void;
   showLiteralDatatype?: boolean;
   linkParams?: {};
   showCopyToClipboardButton?: boolean;
+  filters: Filter[];
+  handleFilterChange: (
+    filter: Pick<Filter, 'filter'> | string,
+    variableType: 'uri' | 'literal',
+    variableName: string
+  ) => void;
 }
 
 export type TableProps = TableConfig & ClassAttributes<Table>;
@@ -119,6 +135,7 @@ interface ExtendedGriddleConfig extends GriddleConfig {
 
 interface ExtendedColumnMetadata extends ColumnMetadata {
   readonly variableName: string | undefined;
+  customHeaderComponent: React.ComponentType<{ column: ExtendedColumnMetadata }>;
 }
 
 interface RenderingState {
@@ -200,7 +217,18 @@ export class Table extends Component<TableProps, State> {
       onPageChange: config.onPageChange,
     };
 
-    const baseConfig: Partial<GriddleConfig> = {
+    const baseConfig: Partial<
+      GriddleConfig & {
+        useExternal: boolean;
+        externalMaxPage: number;
+        externalCurrentPage: number;
+        externalSetPageSize: (pageSize: number) => void;
+        externalSetFilter: (filter: string) => void;
+        externalChangeSort: (sortColumn: string, sortDirection: string) => void;
+        externalSetPage: (page: number) => void;
+        externalIsLoading: boolean;
+      }
+    > = {
       resultsPerPage: config.numberOfDisplayedRows.getOrElse(DEFAULT_ROWS_PER_PAGE),
       showFilter: true,
       useGriddleStyles: false,
@@ -212,6 +240,15 @@ export class Table extends Component<TableProps, State> {
       customPagerComponentOptions: paginationProps,
       useCustomFilterer: true,
       customFilterer: makeCellFilterer(renderingState),
+      useExternal: true,
+      externalCurrentPage: config.currentPage ?? 0,
+      externalMaxPage: 9999,
+      externalSetPageSize: () => null,
+      // externalSetFilter: (searchFilter: string) => config.handleSearchChange(searchFilter),
+      externalSetFilter: () => null,
+      externalChangeSort: () => null,
+      externalSetPage: (idx: number) => config.onPageChange(idx),
+      externalIsLoading: config.isLoading,
     };
 
     let griddleConfig = config.data.fold<ExtendedGriddleConfig>(
@@ -252,7 +289,7 @@ export class Table extends Component<TableProps, State> {
     } else if (buffer.loading || !griddleConfig) {
       return createElement(Spinner, {});
     } else {
-      return createElement(Griddle, griddleConfig);
+      return createElement(CustomGriddle, { griddleProps: griddleConfig, onSearchChange: this.props.handleSearchChange, searchQuery: this.props.searchQuery });
     }
   }
 
@@ -375,6 +412,9 @@ export class Table extends Component<TableProps, State> {
           visible: true,
           order: index,
           customComponent: this.makeCellTemplateComponent(undefined, renderingState),
+          customHeaderComponent: this.makeHeaderComponent(varName, varName, (filter) =>
+            this.props.handleFilterChange(filter, 'uri', varName)
+          ),
           customCompareFn: makeNullableLastComparator(makeCellComparator(renderingState)),
         };
       }
@@ -395,6 +435,12 @@ export class Table extends Component<TableProps, State> {
           displayName: columnConfig.displayName,
           variableName: columnConfig.variableName,
           customComponent: this.makeCellComponentClass(columnConfig, renderingState),
+          customHeaderComponent: this.makeHeaderComponent(
+            columnConfig.displayName,
+            columnConfig.variableName,
+            (filter) => this.props.handleFilterChange(filter, columnConfig.variableType, columnConfig.variableName),
+            columnConfig.filterType
+          ),
           visible: true,
           order: i,
           customCompareFn: makeNullableLastComparator(makeCellComparator(renderingState)),
@@ -433,9 +479,33 @@ export class Table extends Component<TableProps, State> {
     }
   }
 
+  private makeHeaderComponent(
+    columnName: string,
+    variableName: string,
+    onFilterChange: (filter: Pick<Filter, 'filter'> | string) => void,
+    filterType?: 'text' | 'date'
+  ): ComponentClass<any> {
+    const val = this.props.filters.find((f) => f.variableName === variableName) ?? {
+      filter: { date: { from: '', to: '' }, type: 'date', text: '', filterType: filterType, variableType: "uri" },
+    };
+    // eslint-disable-next-line
+    return class extends Component<any, {}> {
+      render(): ReactElement<any> {
+        if (filterType === 'date') {
+          return createElement(SortingCellDate, { name: columnName, onFilterChange, value: val });
+        } else if (filterType === 'text') {
+          return createElement(SortingCell, { name: columnName, onFilterChange, value: val.filter.text });
+        }
+
+        return createElement('div', { children: columnName });
+      }
+    };
+  }
+
   private makeCellTemplateComponent(template: string | undefined, renderingState: RenderingState): ComponentClass<any> {
     const { showLiteralDatatype, linkParams, showCopyToClipboardButton } = this.props;
     const templateSource = _.isString(template) ? String(template) : undefined;
+    // eslint-disable-next-line
     return class extends Component<CellRendererProps, {}> {
       render(): ReactElement<any> {
         if (_.isUndefined(templateSource) === false) {

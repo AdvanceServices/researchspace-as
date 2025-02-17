@@ -25,17 +25,16 @@ import * as Either from 'data.either';
 import * as maybe from 'data.maybe';
 
 import { Cancellation } from 'platform/api/async';
-import { SparqlClient } from 'platform/api/sparql';
+import { SparqlClient, SparqlUtil } from 'platform/api/sparql';
 import { Component, ComponentProps, ComponentContext } from 'platform/api/components';
 import { BuiltInEvents, trigger } from 'platform/api/events';
 
 import { Spinner } from 'platform/components/ui/spinner';
+import { TemplateItem } from 'platform/components/ui/template';
 import { ControlledPropsHandler } from 'platform/components/utils';
 import { ErrorNotification } from 'platform/components/ui/notification';
 
 import { ColumnConfiguration, Table, TableConfig, TableLayout } from './Table';
-import { parseQuerySync, parseQuery } from 'platform/api/sparql/SparqlUtil';
-import { Pattern, SparqlQuery, BlockPattern } from 'sparqljs';
 
 interface ControlledProps {
   /**
@@ -49,11 +48,7 @@ interface TableState {
   data?: SparqlClient.SparqlSelectResult;
   isLoading?: boolean;
   currentPage?: number;
-  maxPage?: number;
   error?: any;
-  filters: { filter: string; variableName: string }[];
-  searchQuery: string | null;
-  queryDebounce: ReturnType<typeof setTimeout> | null;
 }
 
 interface Options {
@@ -185,10 +180,6 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     this.state = {
       isLoading: true,
       currentPage: props.currentPage ? props.currentPage : 0,
-      filters: [],
-      maxPage: 0,
-      queryDebounce: null,
-      searchQuery: null,
     };
   }
 
@@ -200,35 +191,22 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
   }
 
   public shouldComponentUpdate(nextProps: SemanticTableProps, nextState: TableState) {
-    return (
-      nextState.isLoading !== this.state.isLoading ||
-      !_.isEqual(nextProps, this.props) ||
-      nextState.currentPage !== this.state.currentPage ||
-      nextState.maxPage !== this.state.maxPage ||
-      !_.isEqual(this.state.data, nextState.data)
-
-    );
+    return nextState.isLoading !== this.state.isLoading || !_.isEqual(nextProps, this.props);
   }
 
   public componentWillReceiveProps(nextProps: SemanticTableProps, context: ComponentContext) {
     if (nextProps.query !== this.props.query) {
       // we need to reset currentPage when we receive new query when component is used in semantic-search.
-      this.prepareConfigAndExecuteQuery({ ...nextProps, currentPage: 0 }, context, true);
+      this.prepareConfigAndExecuteQuery({...nextProps, currentPage: 0}, context);
     }
   }
 
   public componentDidMount() {
-    this.prepareConfigAndExecuteQuery(this.props, this.context, true);
+    this.prepareConfigAndExecuteQuery(this.props, this.context);
   }
 
   componentWillUnmount() {
     this.cancellation.cancelAll();
-  }
-
-  componentDidUpdate(_prevProps, prevState) {
-    if (this.state.currentPage !== prevState.currentPage) {
-      this.prepareConfigAndExecuteQuery(this.props, this.context);
-    }
   }
 
   public render() {
@@ -237,33 +215,13 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     } else {
       return D.div(
         { className: 'semantic-table-holder' },
-        this.state.isLoading ? createElement(Spinner) : this.renderTable()
+        this.state.isLoading
+          ? createElement(Spinner)
+          : this.state.data && !SparqlUtil.isSelectResultEmpty(this.state.data)
+          ? this.renderTable()
+          : createElement(TemplateItem, { template: { source: this.props.noResultTemplate } })
       );
     }
-  }
-
-  private handleSearchChange(query: string) {
-    clearTimeout(this.state.queryDebounce);
-    this.setState(() => {
-      const newSearchQuery = query;
-      return {
-        searchQuery: newSearchQuery,
-        queryDebounce: setTimeout(() => this.prepareConfigAndExecuteQuery(this.props, this.context), 1500),
-      };
-    });
-  }
-
-  private handleFilterChange(filter: string, variableName: string) {
-    clearTimeout(this.state.queryDebounce);
-    this.setState((state) => {
-      const newFilters = state.filters
-        .filter((f) => f.variableName !== variableName)
-        .concat({ filter, variableName: variableName });
-      return {
-        filters: newFilters,
-        queryDebounce: setTimeout(() => this.prepareConfigAndExecuteQuery(this.props, this.context), 1500),
-      };
-    });
   }
 
   private renderTable() {
@@ -277,141 +235,30 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     const { onControlledPropChange, ...otherProps } = this.props;
     const controlledProps: Partial<TableConfig> = {
       currentPage: this.state.currentPage,
-      onPageChange: (page) => {
-        this.setState({ currentPage: page });
-      },
+      onPageChange: onControlledPropChange ? (page) => {
+        this.setState({currentPage: page});
+        onControlledPropChange({ currentPage: page });
+      } : undefined,
     };
     return createElement(Table, {
       ...otherProps,
       ...controlledProps,
-      maxPage: this.state.maxPage,
       layout: maybe.fromNullable(layout),
       numberOfDisplayedRows: maybe.fromNullable(this.props.numberOfDisplayedRows),
       data: Either.Right<any[], SparqlClient.SparqlSelectResult>(this.state.data),
       ref: this.TABLE_REF,
-      filters: this.state.filters,
-      handleSearchChange: (query: string) => this.handleSearchChange(query),
-      handleFilterChange: (filter, variableName) => this.handleFilterChange(filter, variableName),
     });
   }
 
-  private extractVariablesFromGroup(group: Pattern, variables: {literal: Set<string>, uri: Set<string>}) {
-    if (group.type === "optional") {
-      // this.extractVariablesFromGroup(group.patterns[0], variables);
-      // unbounded variables may break the query
-      return;
-    } else if (group.type === "bgp") {
-      group.triples.forEach(triple => {
-        if (triple.predicate === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") return;
-
-        variables.literal.delete(triple.subject)
-        variables.uri.delete(triple.subject)
-
-        if (!variables.literal.has(triple.object) || !variables.uri.has(triple.object)) {
-          if (triple.predicate === "rdfs:literal") {
-            variables.literal.add(triple.object);
-          } else {
-            variables.uri.add(triple.object);
-          }
-        }
-      });
-    }
-  }
-
-  private extractVariablesFromQueryTriples(parsedQuery: SparqlQuery): {literal: Set<string>, uri: Set<string>} {
-    const variables = {
-      literal: new Set<string>(),
-      uri: new Set<string>(),
-    };
-    if (parsedQuery.type === 'query' && parsedQuery.queryType === 'SELECT') {
-      for (const group of parsedQuery.where) {
-        if (group.type !== "bgp" && group.type !== "optional") {
-          continue;
-        }
-
-        this.extractVariablesFromGroup(group, variables);
-      }
-    }
-
-    return variables;
-  }
-
   private prepareConfigAndExecuteQuery = (props: SemanticTableProps, context: ComponentContext) => {
-    const parsedQuery = parseQuerySync(props.query);
-    if (parsedQuery.type === 'query' && parsedQuery.queryType === 'SELECT') {
-      parsedQuery.limit = props.numberOfDisplayedRows ?? 10;
-      parsedQuery.offset = (props.numberOfDisplayedRows ?? 10) * (this.state.currentPage ?? 0);
-
-
-      if (this.state.searchQuery) {
-        const variables = this.extractVariablesFromQueryTriples(parsedQuery);
-        const searchTriples: Pattern = {
-          type: "bgp",
-          triples: [
-            {
-              subject: `?filter_search`,
-              predicate: 'http://www.bigdata.com/rdf/search#search',
-              object: `"${this.state.searchQuery}"`,
-            },
-            {
-              subject: `?filter_search`,
-              predicate: 'http://www.bigdata.com/rdf/search#matchAllTerms',
-              object: `"true"`,
-            },
-          ]
-        }
-
-        const union: BlockPattern = { type: "union", patterns: [] };
-        variables.uri.forEach((val1, val2) => {
-          union.patterns.push({
-            type: "bgp",
-            triples: [
-              {
-                subject: `${val2}`,
-                predicate: 'http://www.w3.org/2000/01/rdf-schema#label',
-                object: `?filter_search`,
-              },
-            ]
-          })
-        });
-
-        parsedQuery.where.push(searchTriples);
-        parsedQuery.where.push(union);
-      }
-
-      if (this.state.filters) {
-        this.state.filters
-          .filter((f) => f.filter !== '')
-          .forEach((f) => {
-            const searchVariable = `?${f.variableName}_search`;
-            const triples: Pattern = {
-              type: 'bgp',
-              triples: [
-                {
-                  subject: searchVariable,
-                  predicate: 'http://www.bigdata.com/rdf/search#search',
-                  object: `"${f.filter}"`,
-                },
-                {
-                  subject: searchVariable,
-                  predicate: 'http://www.bigdata.com/rdf/search#matchAllTerms',
-                  object: `"true"`,
-                },
-                {
-                  subject: `?${f.variableName}`,
-                  predicate: 'http://www.w3.org/2000/01/rdf-schema#label',
-                  object: searchVariable,
-                },
-              ],
-            };
-            parsedQuery.where.push(triples);
-          });
-      }
-    }
-
+    this.setState({
+      isLoading: true,
+      error: undefined,
+      currentPage: props.currentPage,
+    });
     this.querying = this.cancellation.deriveAndCancel(this.querying);
     const loading = this.querying
-      .map(SparqlClient.select(parsedQuery, { context: context.semanticContext }))
+      .map(SparqlClient.select(props.query, { context: context.semanticContext }))
       .onValue((res) => this.setState({ data: res, isLoading: false }))
       .onError((error) => this.setState({ isLoading: false, error }))
       .onEnd(() => {
@@ -419,7 +266,6 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
           trigger({ eventType: BuiltInEvents.ComponentLoaded, source: this.props.id });
         }
       });
-
     if (this.props.id) {
       trigger({
         eventType: BuiltInEvents.ComponentLoading,
