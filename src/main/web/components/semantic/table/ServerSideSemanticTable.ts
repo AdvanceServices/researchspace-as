@@ -34,9 +34,9 @@ import { Spinner } from 'platform/components/ui/spinner';
 import { ControlledPropsHandler } from 'platform/components/utils';
 import { ErrorNotification } from 'platform/components/ui/notification';
 
-import { ColumnConfiguration, Table, TableConfig, TableLayout } from './ServerSideTable';
+import { ColumnConfiguration, Table, TableConfig, TableLayout, TableColumnConfiguration } from './ServerSideTable';
 import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
-import { Pattern, SparqlQuery, BlockPattern } from 'sparqljs';
+import { Pattern, BlockPattern } from 'sparqljs';
 
 interface ControlledProps {
   /**
@@ -182,8 +182,7 @@ function isRowConfig(config: SemanticTableConfig): config is RowConfig {
 export type SemanticTableConfig = BaseConfig | ColumnConfig | RowConfig;
 export type SemanticTableProps = SemanticTableConfig &
   ControlledPropsHandler<ControlledProps> &
-  ComponentProps &
-  Props<SemanticTable>;
+  ComponentProps & { columnConfiguration?: Array<TableColumnConfiguration> } & Props<SemanticTable>;
 
 export class SemanticTable extends Component<SemanticTableProps, TableState> {
   static propTypes: Partial<Record<keyof SemanticTableProps, any>> = {
@@ -214,11 +213,11 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
   }
 
   public shouldComponentUpdate(nextProps: SemanticTableProps, nextState: TableState) {
-    console.log(this.state.filters, nextState.filters)
     return (
       nextState.isLoading !== this.state.isLoading ||
       !_.isEqual(nextProps, this.props) ||
       nextState.currentPage !== this.state.currentPage ||
+      nextState.searchQuery !== this.state.searchQuery ||
       !_.isEqual(this.state.data, nextState.data)
     );
   }
@@ -257,12 +256,9 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
 
   private handleSearchChange(query: string) {
     clearTimeout(this.state.queryDebounce);
-    this.setState(() => {
-      const newSearchQuery = query;
-      return {
-        searchQuery: newSearchQuery,
-        queryDebounce: setTimeout(() => this.prepareConfigAndExecuteQuery(this.props, this.context), 1500),
-      };
+    this.setState({
+      searchQuery: query,
+      queryDebounce: setTimeout(() => this.prepareConfigAndExecuteQuery(this.props, this.context), 1500),
     });
   }
 
@@ -341,47 +337,6 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
     });
   }
 
-  private extractVariablesFromGroup(group: Pattern, variables: { literal: Set<string>; uri: Set<string> }) {
-    if (group.type === 'optional') {
-      // this.extractVariablesFromGroup(group.patterns[0], variables);
-      // unbounded variables may break the query
-      return;
-    } else if (group.type === 'bgp') {
-      group.triples.forEach((triple) => {
-        if (triple.predicate === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type') return;
-
-        variables.literal.delete(triple.subject);
-        variables.uri.delete(triple.subject);
-
-        if (!variables.literal.has(triple.object) || !variables.uri.has(triple.object)) {
-          if (triple.predicate === 'rdfs:literal') {
-            variables.literal.add(triple.object);
-          } else {
-            variables.uri.add(triple.object);
-          }
-        }
-      });
-    }
-  }
-
-  private extractVariablesFromQueryTriples(parsedQuery: SparqlQuery): { literal: Set<string>; uri: Set<string> } {
-    const variables = {
-      literal: new Set<string>(),
-      uri: new Set<string>(),
-    };
-    if (parsedQuery.type === 'query' && parsedQuery.queryType === 'SELECT') {
-      for (const group of parsedQuery.where) {
-        if (group.type !== 'bgp' && group.type !== 'optional') {
-          continue;
-        }
-
-        this.extractVariablesFromGroup(group, variables);
-      }
-    }
-
-    return variables;
-  }
-
   private prepareConfigAndExecuteQuery = (props: SemanticTableProps, context: ComponentContext) => {
     this.setState({
       isLoading: true,
@@ -392,7 +347,6 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       parsedQuery.offset = (props.numberOfDisplayedRows ?? 10) * (this.state.currentPage ?? 0);
 
       if (this.state.searchQuery) {
-        const variables = this.extractVariablesFromQueryTriples(parsedQuery);
         const searchTriples: Pattern = {
           type: 'bgp',
           triples: [
@@ -409,27 +363,26 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
           ],
         };
 
-        const union: BlockPattern = { type: 'union', patterns: [] };
-        variables.uri.forEach((val1, val2) => {
-          union.patterns.push({
-            type: 'bgp',
-            triples: [
-              {
-                subject: `${val2}`,
-                predicate: 'http://www.w3.org/2000/01/rdf-schema#label',
-                object: `?filter_search`,
-              },
-            ],
-          });
+        const units: string[] = [];
+
+        this.props.columnConfiguration.forEach((col) => {
+          if (!col.variableType) return;
+
+          if (col.variableType === 'uri') {
+            units.push(`EXISTS { ?${col.variableName} rdfs:label ?filter_search }`)
+          } else if (col.variableType === 'literal') {
+            units.push(`?${col.variableName} = ?filter_search`)
+          }
         });
+        const filterQuery = `SELECT * WHERE { FILTER(${units.join(' || ')}) }`
+        const parsedfilterQuery=  parseQuerySync(filterQuery)
 
         parsedQuery.where.push(searchTriples);
-        parsedQuery.where.push(union);
+        parsedQuery.where.push(parsedfilterQuery.where[0]);
       }
 
       if (this.state.filters) {
         this.state.filters.forEach((f) => {
-          console.log(f.filter.filterType);
           if (f.filter.filterType === 'text') {
             const searchVariable = `?${f.variableName}_search`;
             const searchPattern: Pattern = {

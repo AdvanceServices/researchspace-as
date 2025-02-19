@@ -74,6 +74,7 @@ export default class SortingCellDate extends Component<SortingCellProps, State> 
                   gap: '8px'
                 }}
               >
+                <div>From</div>
                 <input
                   type="date"
                   onClick={(e) => e.stopPropagation()}
@@ -82,6 +83,7 @@ export default class SortingCellDate extends Component<SortingCellProps, State> 
                   placeholder="From"
                   style={{ width: '100%', padding: '8px' }}
                 />
+                <div>To</div>
                 <input
                   type="date"
                   onClick={(e) => e.stopPropagation()}
