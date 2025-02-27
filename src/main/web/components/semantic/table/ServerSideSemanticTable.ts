@@ -369,13 +369,13 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
           if (!col.variableType) return;
 
           if (col.variableType === 'uri') {
-            units.push(`EXISTS { ?${col.variableName} rdfs:label ?filter_search }`)
+            units.push(`EXISTS { ?${col.variableName} rdfs:label ?filter_search }`);
           } else if (col.variableType === 'literal') {
-            units.push(`?${col.variableName} = ?filter_search`)
+            units.push(`?${col.variableName} = ?filter_search`);
           }
         });
-        const filterQuery = `SELECT * WHERE { FILTER(${units.join(' || ')}) }`
-        const parsedfilterQuery=  parseQuerySync(filterQuery)
+        const filterQuery = `SELECT * WHERE { FILTER(${units.join(' || ')}) }`;
+        const parsedfilterQuery = parseQuerySync(filterQuery);
 
         parsedQuery.where.push(searchTriples);
         parsedQuery.where.push(parsedfilterQuery.where[0]);
@@ -452,7 +452,14 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
               expression: {
                 type: 'operation',
                 operator: '<=',
-                args: [labelVariable, `xsd:dateTime("${f.filter.date.to}T00:00:00Z")`],
+                args: [
+                  labelVariable,
+                  {
+                    type: 'functionCall',
+                    function: 'http://www.w3.org/2001/XMLSchema#dateTime',
+                    args: [`"${f.filter.date.to}T00:00:00Z"`],
+                  },
+                ],
               },
             };
 
