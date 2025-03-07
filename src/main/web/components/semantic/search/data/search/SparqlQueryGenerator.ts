@@ -465,6 +465,10 @@ function simpleDisjunctToQueryPattern(
   disjunct: Model.Disjunct
 ) {
   const patternQuery = simpleDisjunctPatternQuery(config, projectionVariable, domain, conjunct, disjunct);
+
+  if (config.allowUsingExistingVariables)
+    return patternQuery.where[0];
+
   return randomizeVariables(patternQuery, projectionVariable).where[0];
 }
 

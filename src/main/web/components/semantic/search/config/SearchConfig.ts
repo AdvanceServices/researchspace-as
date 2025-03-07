@@ -426,6 +426,8 @@ export interface SemanticSearchConfig {
    * Compressed JSON representation of the search state. Can be used to load saved search.
    */
   initialState?: string;
+
+  allowUsingExistingVariables?: boolean;
 }
 
 /**

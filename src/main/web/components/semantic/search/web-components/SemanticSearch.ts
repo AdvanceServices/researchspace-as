@@ -77,6 +77,7 @@ export class SemanticSearch extends Component<Props, State> {
     },
     limit: SearchDefaults.ResultLimit,
     selectorMode: 'stack',
+    allowUsingExistingVariables: false,
   };
 
   private readonly cancellation = new Cancellation();
