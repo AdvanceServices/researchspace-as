@@ -68,6 +68,27 @@ export class FacetComponent extends Component<FacetProps, {}> {
     );
   }
 
+  private resetFilters() {
+    const fs = this.props.data.relations.map(r => this.props.actions.deselectFacetValue(r))
+    const values = this.props.data.viewState.selectedValues.values();
+    while (values) {
+      const v = values.next().value
+
+      if (!v) {
+        break
+      }
+
+      fs.forEach(f => {
+        try {
+          f(v.values().next().value)
+        } catch (e) {
+          return
+        }
+      })
+    }
+    this.props.actions.deselectRelation();
+  }
+
   private renderRelations() {
     return D.div(
       { className: 'facet-relations' },
@@ -83,7 +104,8 @@ export class FacetComponent extends Component<FacetProps, {}> {
             config: this.props.config,
           })
         )
-        .toArray()
+        .toArray(),
+      D.button({ className: "facet-reset-button", onClick: () => this.resetFilters() }, "Reset Filters"),
     );
   }
 
