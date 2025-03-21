@@ -69,8 +69,7 @@ export class FacetComponent extends Component<FacetProps, {}> {
   }
 
   private resetFilters() {
-    const fs = this.props.data.relations.map(r => this.props.actions.deselectFacetValue(r))
-    const values = this.props.data.viewState.selectedValues.values();
+    const values = this.props.data.selectedFacets.values();
     while (values) {
       const v = values.next().value
 
@@ -78,13 +77,23 @@ export class FacetComponent extends Component<FacetProps, {}> {
         break
       }
 
-      fs.forEach(f => {
+      if ("defaultRange" in v) {
+        const f = this.props.actions.selectFacetValue(v.relation);
         try {
-          f(v.values().next().value)
+          f(v.defaultRange)
         } catch (e) {
-          return
+          continue
         }
-      })
+      } else {
+        const f = this.props.actions.deselectFacetValue(v.relation);
+        for (const selected of v.values) {
+          try {
+            f(selected)
+          } catch (e) {
+            continue
+          }
+        }
+      }
     }
     this.props.actions.deselectRelation();
   }

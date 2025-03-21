@@ -19,10 +19,15 @@
 
 package org.researchspace.rest.endpoint;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Map;
@@ -46,6 +51,7 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.StreamingOutput;
 import javax.ws.rs.core.UriInfo;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -70,6 +76,7 @@ import org.eclipse.rdf4j.rio.RDFWriter;
 import org.eclipse.rdf4j.rio.RDFWriterFactory;
 import org.eclipse.rdf4j.rio.RDFWriterRegistry;
 import org.eclipse.rdf4j.rio.Rio;
+import org.hibernate.graph.Graph;
 import org.researchspace.api.sparql.ServletRequestUtil;
 import org.researchspace.config.Configuration;
 import org.researchspace.config.NamespaceRegistry;
@@ -148,18 +155,18 @@ public class RDFGraphStoreEndpoint {
 
         try (RepositoryConnection con = getRepository(repository).getConnection()) {
             RDFFormat rioFormat = format.get();
-            Model results = Rio.parse(in, uriInfo.getAbsolutePath().toString(), rioFormat);
 
             boolean quadFormat = (rioFormat == RDFFormat.TRIG) || (rioFormat == RDFFormat.TRIX)
                     || (rioFormat == RDFFormat.NQUADS);
-            con.begin();
-            if (quadFormat && keepSourceGraphs) {
-                con.add(results);
-            } else {
-                con.add(results, graphUri);
-            }
-            con.commit();
 
+            if (quadFormat && keepSourceGraphs) {
+                con.add(in, format.get());
+            } else {
+                con.add(in, format.get(), graphUri);
+            }
+
+            in.close();
+            con.close();
         } catch (RepositoryException e) {
 
             final Throwable cause = e.getCause();
@@ -184,9 +191,8 @@ public class RDFGraphStoreEndpoint {
                         .build();
 
             } else {
-
                 logger.error("Failed to create GRAPH \"{}\" : {}", graphUri, e.getMessage());
-                logger.debug("Details:", e);
+                logger.error("Details:", e);
 
                 return Response.serverError().entity(e.getMessage()).build();
 

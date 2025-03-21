@@ -39,7 +39,6 @@
   "semantic-search-table-result": "platform/components/semantic/search/web-components/SemanticSearchTableResult.tsx",
 
   "semantic-simple-search": "platform/components/semantic/simple-search/SimpleSearch.ts",
-  "composable-search": "platform/components/semantic/composable-search/ComposableSearch.ts",
 
   "semantic-if": "platform/components/semantic/conditional/SemanticIf.tsx",
   "semantic-switch": "platform/components/semantic/conditional/SemanticSwitch.tsx",

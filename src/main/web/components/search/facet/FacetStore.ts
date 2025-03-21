@@ -91,6 +91,7 @@ export interface FacetData {
   relations: Relations;
   viewState: FacetViewState;
   ast: F.Ast;
+  selectedFacets: Array<{ relation: Relation, values: Array<F.FacetValue>, defaultRange?: { begin: any, end: any } }>;
 }
 
 export type SelectedValues = OrderedMap<Relation, List<F.FacetValue>>;
@@ -137,6 +138,7 @@ export class FacetStore {
   private facetData = Action<FacetData>();
   private facetedQuery = Action<SparqlJs.SelectQuery>();
   private facetView = Action<FacetViewState>();
+  private selectedFacets = Action<Array<{ relation: Relation, values: Array<F.FacetValue>, defaultRange?: { begin: any, end: any } }>>();
 
   private toggleCategoryAction: Action<Data.Maybe<Category>>;
   private toggleRelationAction: Action<Data.Maybe<Relation>>;
@@ -155,6 +157,7 @@ export class FacetStore {
     const initialAst = config.initialAst || { conjuncts: [] };
     this.ast(initialAst);
     this.selectedValues = Action<SelectedValues>(this.initialValues(initialAst));
+    this.selectedFacets = Action<Array<{ relation: Relation, values: Array<F.FacetValue> }>>([]);
 
     this.baseQuery(_.clone(this.config.baseQuery));
     const currentBaseQuery = this.baseQuery.$property.skipDuplicates(_.isEqual);
@@ -184,6 +187,7 @@ export class FacetStore {
     Kefir.combine({
       relations: this.relations.$property,
       viewState: this.facetView.$property,
+      selectedFacets: this.selectedFacets.$property,
       ast: this.ast.$property,
       categories: Kefir.constant(categories),
     })
@@ -191,8 +195,8 @@ export class FacetStore {
       .onValue(this.facetData);
 
     // update list of selected facet values on the selection of new facet value
-    Kefir.combine({ value: this.selectValueAction.$property }, { selected: this.selectedValues.$property }).onValue(
-      ({ value, selected }) => {
+    Kefir.combine({ value: this.selectValueAction.$property }, { selected: this.selectedValues.$property, facets: this.selectedFacets.$property }).onValue(
+      ({ value, facets, selected }) => {
         const relationType = this.getDisjunctType(value.relation);
         let selectedRelations = selected;
         // we need to remove old selected value if it is date-range or numeric-range
@@ -206,12 +210,17 @@ export class FacetStore {
         let selectedValues = selectedRelations.get(value.relation) || List<F.FacetValue>();
         selectedValues = selectedValues.push(value.value);
         this.selectedValues(selectedRelations.set(value.relation, selectedValues));
+
+        const selectedFacet = facets.find(f => f.relation.iri === value.relation.iri);
+        if (selectedFacet) {
+          selectedFacet.values.push(value.value);
+        }
       }
     );
 
     // update list of selected facet values on the de-selection of some facet value
-    Kefir.combine({ value: this.deselectValueAction.$property }, { selected: this.selectedValues.$property }).onValue(
-      ({ value, selected }) => {
+    Kefir.combine({ value: this.deselectValueAction.$property }, { selected: this.selectedValues.$property, facets: this.selectedFacets.$property }).onValue(
+      ({ value, facets, selected }) => {
         const selectedValues = selected
           .get(value.relation)
           .filterNot((selectedValue) => F.partialValueEquals(value.value, selectedValue)) as List<F.FacetValue>;
@@ -221,6 +230,11 @@ export class FacetStore {
           this.selectedValues(selected.remove(value.relation))
         } else {
           this.selectedValues(selected.set(value.relation, selectedValues));
+        }
+
+        const selectedFacet = facets.find(f => f.relation.iri === value.relation.iri);
+        if (selectedFacet) {
+          selectedFacet.values = selectedFacet.values.filter(v => v !== value.value);
         }
       }
     );
@@ -293,12 +307,13 @@ export class FacetStore {
     Kefir.combine(
       {
         relation: this.toggleRelationAction.$property,
+        selectedFacets: this.selectedFacets.$property,
         baseQuery: currentBaseQuery,
       },
       {
         ast: this.ast.$property,
       }
-    ).onValue(({ ast, relation, baseQuery }) => {
+    ).onValue(({ ast, relation, selectedFacets, baseQuery }) => {
       if (relation.isNothing) {
         this.values({ values: [], loading: false, error: false });
       } else {
@@ -312,6 +327,13 @@ export class FacetStore {
         }
         facetValues
           .onValue((facetValues) => {
+            if (!selectedFacets.find(f => f.relation.iri === relation.get().iri)) {
+              if (relation.get().hasRange.iri.value === "http://www.w3.org/2001/XMLSchema#date") {
+                this.selectedFacets([...selectedFacets, { relation: relation.get(), values: [], defaultRange: { begin: facetValues[0].begin, end: facetValues[0].end } }]);
+              } else {
+                this.selectedFacets([...selectedFacets, { relation: relation.get(), values: [] }])
+              }
+            }
             this.values({ values: facetValues, loading: false, error: false });
             this.valuesCache = { [relationIri]: facetValues };
             trigger({ eventType: BuiltInEvents.ComponentLoaded, source: config.config.id });
@@ -606,7 +628,7 @@ export class FacetStore {
       .flatMap((values) => this.augmentWithLabelsFromServiceIfNeeded(values))
       // This seems to force order by label
       // Sort by count order
-      .map((values) =>  values.slice().sort((a,b) => b.count - a.count))
+      .map((values) => values.slice().sort((a, b) => b.count - a.count))
       .toProperty();
   }
 
@@ -786,8 +808,8 @@ function generateFacetValuePatternFromRelation(config: FacetStoreConfig, relatio
       kind === 'resource'
         ? SearchDefaults.DefaultFacetValuesQueries.ResourceRelationPattern
         : kind === 'literal'
-        ? SearchDefaults.DefaultFacetValuesQueries.LiteralRelationPattern
-        : assertHandledEveryPatternKind(kind);
+          ? SearchDefaults.DefaultFacetValuesQueries.LiteralRelationPattern
+          : assertHandledEveryPatternKind(kind);
   }
 
   const query = SparqlUtil.parseQuery(getDefaultValuesQuery(config.config, kind));
@@ -800,12 +822,12 @@ function generateFacetValuePatternFromRelation(config: FacetStoreConfig, relatio
   return kind === 'resource'
     ? { kind: 'resource', valuesQuery }
     : kind === 'literal'
-    ? { kind: 'literal', valuesQuery }
-    : kind === 'date-range'
-    ? { kind: 'date-range', valuesQuery }
-    : kind === 'numeric-range'
-    ? { kind: 'numeric-range', valuesQuery }
-    : assertHandledEveryPatternKind(kind);
+      ? { kind: 'literal', valuesQuery }
+      : kind === 'date-range'
+        ? { kind: 'date-range', valuesQuery }
+        : kind === 'numeric-range'
+          ? { kind: 'numeric-range', valuesQuery }
+          : assertHandledEveryPatternKind(kind);
 }
 
 function getDefaultValuesQuery(config: SemanticFacetConfig, kind: PatternKind) {
@@ -813,12 +835,12 @@ function getDefaultValuesQuery(config: SemanticFacetConfig, kind: PatternKind) {
   return kind === 'resource'
     ? config.defaultValueQueries.resource || defaultQueries.forResource()
     : kind === 'literal'
-    ? config.defaultValueQueries.literal || defaultQueries.forLiteral()
-    : kind === 'date-range'
-    ? defaultQueries.forDateRange()
-    : kind === 'numeric-range'
-    ? defaultQueries.forNumericRange()
-    : assertHandledEveryPatternKind(kind);
+      ? config.defaultValueQueries.literal || defaultQueries.forLiteral()
+      : kind === 'date-range'
+        ? defaultQueries.forDateRange()
+        : kind === 'numeric-range'
+          ? defaultQueries.forNumericRange()
+          : assertHandledEveryPatternKind(kind);
 }
 
 /**
