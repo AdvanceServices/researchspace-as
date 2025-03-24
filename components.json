@@ -113,6 +113,7 @@
   "mp-account-manager": "platform/components/admin/realm-manager/AccountManagerComponent.ts",
 
   "mp-sparql-download": "platform/components/semantic/results/SparqlDownloadComponent.ts",
+  "mp-sparql-context-download": "platform/components/semantic/results/SemanticSparqlDownload.tsx",
   "mp-sparql-result-counts": "platform/components/semantic/results/ResultsNumber.ts",
 
   "mp-ldp-remove-from-container-action": "platform/components/ldp/RemoveFromContainerAction.ts",
