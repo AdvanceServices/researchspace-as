@@ -53,6 +53,7 @@ interface State {
   resultQuery?: Data.Maybe<SparqlJs.SelectQuery>;
   searchProfileStore?: Data.Maybe<SearchProfileStore>;
   hasFacet?: boolean;
+  selectedFacets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>;
   resultsLoaded?: boolean;
   resultState?: { [componentId: string]: object };
   availableDatasets?: Array<Dataset>;
@@ -104,6 +105,7 @@ export class SemanticSearch extends Component<Props, State> {
         range: Model.Category;
       }>(),
       hasFacet: false,
+      selectedFacets: [],
       resultState: {},
       availableDatasets: availableDatasets,
       selectedDatasets: this.getDefaultDatasets(availableDatasets),
@@ -124,6 +126,8 @@ export class SemanticSearch extends Component<Props, State> {
       resultsStatus: { loaded: this.state.resultsLoaded, count: this.resultCount },
       facetStructure: Maybe.fromNullable(this.state.facetStructure),
       facetActions: Maybe.fromNullable(this.state.facetActions),
+      selectedFacets: this.state.selectedFacets,
+      setSelectedFacets: this.setSelectedFacets,
       baseConfig: this.props,
       domain: this.state.domain,
       availableDomains: this.state.availableDomains,
@@ -231,6 +235,7 @@ export class SemanticSearch extends Component<Props, State> {
           hasFacet: query.isJust ? state.hasFacet : false,
           resultQuery: query,
           resultsLoaded: false,
+          selectedFacets: [],
           isConfigurationEditable: query.isJust ? false : true,
         };
       }
@@ -285,6 +290,10 @@ export class SemanticSearch extends Component<Props, State> {
       hasFacet: true,
       resultsLoaded: false,
     });
+  };
+
+  private setSelectedFacets = (facets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>) => {
+    this.setState({ selectedFacets: facets });
   };
 
   private setFacetActions = (actions: FacetModel.Actions) => {

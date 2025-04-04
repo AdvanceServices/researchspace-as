@@ -26,6 +26,7 @@ import { Component } from 'platform/api/components';
 import * as LabelsService from 'platform/api/services/resource-label';
 import * as Kefir from 'kefir';
 import { Rdf } from 'platform/api/rdf';
+import { SemanticSearchContext } from '../search';
 
 /**
  * Component to trigger the download of a SPARQL result set.
@@ -57,8 +58,8 @@ export interface SparqlDownloadComponentProps {
    * In case filename is provided, downloadResourceIri will be ignored
    */
   downloadResourceIri?: string;
-  context: any
-  ;
+  rules: { relation: string; min: number; max: number; message: string}[];
+  context: SemanticSearchContext;
 }
 
 class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {}> {
@@ -103,11 +104,33 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     this.subscription.unsubscribe();
   }
 
+  private areRulesSatisfied(): boolean {
+    if (!this.props.rules) return true
+
+    const filteredFacets = this.props.context.selectedFacets.filter(f => this.props.rules.find(r => r.relation === f.relation.iri.value));
+    if (this.props.rules && filteredFacets.every(f => f.values.length === 0)) return false;
+
+    console.log(filteredFacets)
+    return filteredFacets.every(f => {
+      const rule = this.props.rules.find(r => f.relation.iri.value === r.relation)!;
+
+      console.log(rule, f.values.length, rule.min)
+      return rule.min <= f.values.length && rule.max >= f.values.length;
+    });
+  }
+
   public render() {
     const child = Children.only(this.props.children) as ReactElement<any>;
-    const props = {
-      onClick: this.onSave,
-    };
+    const props = {};
+    if (this.areRulesSatisfied()) {
+      props['onClick'] = this.onSave;
+    } else {
+      props['onClick'] = () => window.alert(this.props.rules.map(r => r.message).join("\n"));
+      props['style'] = {
+        cursor: 'not-allowed',
+        opacity: 0.5,
+      }
+    }
 
     return cloneElement(child, props);
   }
