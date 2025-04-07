@@ -27,6 +27,7 @@ import * as LabelsService from 'platform/api/services/resource-label';
 import * as Kefir from 'kefir';
 import { Rdf } from 'platform/api/rdf';
 import { SemanticSearchContext } from '../search';
+import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
 
 /**
  * Component to trigger the download of a SPARQL result set.
@@ -60,6 +61,8 @@ export interface SparqlDownloadComponentProps {
   downloadResourceIri?: string;
   rules: { relation: string; min: number; max: number; message: string}[];
   context: SemanticSearchContext;
+  queryExtension?: string;
+  columnHeaders?: { variable: string; columnName: string}[];
 }
 
 class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {}> {
@@ -71,12 +74,27 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     const {downloadResourceIri, filename} = this.props
     const FALLBACK_FILENAME = 'file.csv'
 
-    SparqlClient.sendSparqlQuery(this.props.context.resultQuery.value, this.props.header, { context: this.context.semanticContext })
+    const extraQuery = parseQuerySync(this.props.queryExtension);
+
+    const query = this.props.context.resultQuery.get()
+    if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
+      extraQuery.variables.forEach(el => (query.variables.push(el)))
+
+      query.where.push(...extraQuery.where)
+    }
+
+    SparqlClient.sendSparqlQuery(this.props.context.resultQuery.get(), this.props.header, { context: this.context.semanticContext })
       .onValue((response) => {
         results.push(response);
       })
       .onEnd(() => {
-        const blob = new Blob(results, { type: this.props.header });
+        let headers = results[0].split('\r\n')[0];
+
+        for (const item of this.props.columnHeaders) {
+          headers = headers.replace(item.variable, item.columnName);
+        }
+
+        const blob = new Blob([headers + '\r\n' + results[0].split('\r\n').slice(1).join("\r\n")], { type: this.props.header });
 
         if(!downloadResourceIri && !filename) {
           fileSaver.saveAs(blob, FALLBACK_FILENAME);
@@ -110,11 +128,9 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     const filteredFacets = this.props.context.selectedFacets.filter(f => this.props.rules.find(r => r.relation === f.relation.iri.value));
     if (this.props.rules && filteredFacets.every(f => f.values.length === 0)) return false;
 
-    console.log(filteredFacets)
     return filteredFacets.every(f => {
       const rule = this.props.rules.find(r => f.relation.iri.value === r.relation)!;
 
-      console.log(rule, f.values.length, rule.min)
       return rule.min <= f.values.length && rule.max >= f.values.length;
     });
   }
