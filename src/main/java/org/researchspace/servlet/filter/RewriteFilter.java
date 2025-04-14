@@ -41,7 +41,7 @@ import java.util.List;
  *
  * http://example.org/person/foo ->
  * http://example.com/resource/?uri=http://example.com/person/foo
- * 
+ *
  * @author Alexey Morozov
  */
 @Singleton
@@ -63,7 +63,7 @@ public class RewriteFilter implements Filter {
 
             if (!path.isEmpty() && isAccessibleByIri(path)) {
                 String platformBaseIri = config.getEnvironmentConfig().getPlatformBaseIri();
-                List<NameValuePair> params = Lists.newArrayList(new BasicNameValuePair("uri", platformBaseIri + path));
+                List<NameValuePair> params = Lists.newArrayList(new BasicNameValuePair("uri", platformBaseIri + path.replace("%23", "#")));
 
                 if (httpRequest.getQueryString() != null) {
                     params.addAll(URLEncodedUtils.parse(httpRequest.getQueryString(), null));

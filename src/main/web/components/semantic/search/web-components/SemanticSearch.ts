@@ -53,7 +53,7 @@ interface State {
   resultQuery?: Data.Maybe<SparqlJs.SelectQuery>;
   searchProfileStore?: Data.Maybe<SearchProfileStore>;
   hasFacet?: boolean;
-  selectedFacets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>;
+  selectedFacets?: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>;
   resultsLoaded?: boolean;
   resultState?: { [componentId: string]: object };
   availableDatasets?: Array<Dataset>;

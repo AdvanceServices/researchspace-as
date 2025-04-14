@@ -60,7 +60,7 @@ export interface SparqlDownloadComponentProps {
    */
   downloadResourceIri?: string;
   rules: { relation: string; min: number; max: number; message: string}[];
-  context: SemanticSearchContext;
+  context: any;
   queryExtension?: string;
   columnHeaders?: { variable: string; columnName: string}[];
 }
@@ -74,16 +74,18 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     const {downloadResourceIri, filename} = this.props
     const FALLBACK_FILENAME = 'file.csv'
 
-    const extraQuery = parseQuerySync(this.props.queryExtension);
-
     const query = this.props.context.resultQuery.get()
-    if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
-      extraQuery.variables.forEach(el => (query.variables.push(el)))
 
-      query.where.push(...extraQuery.where)
+    if (this.props.queryExtension) {
+      const extraQuery = parseQuerySync(this.props.queryExtension);
+      if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
+        extraQuery.variables.forEach(el => (query.variables.push(el)))
+
+        query.where.push(...extraQuery.where)
+      }
     }
 
-    SparqlClient.sendSparqlQuery(this.props.context.resultQuery.get(), this.props.header, { context: this.context.semanticContext })
+    SparqlClient.sendSparqlQuery(query, this.props.header, { context: this.context.semanticContext })
       .onValue((response) => {
         results.push(response);
       })
@@ -91,7 +93,7 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
         let headers = results[0].split('\r\n')[0];
 
         for (const item of this.props.columnHeaders) {
-          headers = headers.replace(item.variable, item.columnName);
+          headers = headers.replace(`?${item.variable}`, item.columnName);
         }
 
         const blob = new Blob([headers + '\r\n' + results[0].split('\r\n').slice(1).join("\r\n")], { type: this.props.header });

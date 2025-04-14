@@ -428,8 +428,14 @@ function getSubject(value: FieldValue): Rdf.Iri {
     return value.subject;
   } else if (FieldValue.isAtomic(value)) {
     const node = FieldValue.asRdfNode(value);
+
     if (node.isIri()) {
       return node;
+    }
+
+    if (node.isBnode()) {
+      console.log(node.value)
+      return Rdf.iri(node.value);
     }
   }
   return Rdf.iri('');

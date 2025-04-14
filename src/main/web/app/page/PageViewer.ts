@@ -169,9 +169,14 @@ export class PageViewerComponent extends Component<Props, State> {
   private scrollToAnchor() {
     const fragment = getCurrentUrl().fragment();
     if (fragment) {
-      const element = document.querySelector(fragment);
-      if (element) {
-        element.scrollIntoView(true);
+      try {
+        const element = document.querySelector(fragment);
+
+        if (element) {
+          element.scrollIntoView(true);
+        }
+      } catch (err) {
+        return;
       }
     }
   }

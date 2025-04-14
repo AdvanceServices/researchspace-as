@@ -193,7 +193,7 @@ export function constructUrlForResource(
   return getPrefixedUri(iri).map((mUri) => {
     const baseQuery = repository === 'default' ? {} : { repository: repository };
     const resourceUrl = ConfigHolder.getEnvironmentConfig().resourceUrlMapping.value;
-    if (mUri.isJust) {
+    if (mUri && mUri.isJust) {
       const url = uri(`${resourceUrl}${mUri.get()}`);
       url.setQuery({ ...baseQuery, ...props });
       url.fragment(fragment);

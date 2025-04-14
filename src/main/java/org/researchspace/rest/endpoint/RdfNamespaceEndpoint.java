@@ -89,10 +89,26 @@ public class RdfNamespaceEndpoint {
     public Response getPrefixedUris(final JsonParser jp) throws IOException {
         final ValueFactory vf = SimpleValueFactory.getInstance();
         final JsonUtil.JsonFieldProducer processor = (jGenerator, input) -> {
+            IRI iri = null;
+
             try {
-                jGenerator.writeStringField(input, ns.getPrefixedIRI(vf.createIRI(input)).orElse(null));
-            } catch (IOException e) {
-                throw Throwables.propagate(e);
+                iri = vf.createIRI(input);
+            } catch (IllegalArgumentException e) {
+                // ignore
+            }
+
+            if (iri != null) {
+                try {
+                    jGenerator.writeStringField(input, ns.getPrefixedIRI(iri).orElse(null));
+                } catch (IOException e) {
+                    throw Throwables.propagate(e);
+                }
+            } else {
+                try {
+                    jGenerator.writeStringField(input, null);
+                } catch (IOException e) {
+                    throw Throwables.propagate(e);
+                }
             }
         };
         final StreamingOutput stream = JsonUtil.processJsonMap(jp, processor);
