@@ -26,8 +26,9 @@ import { Component } from 'platform/api/components';
 import * as LabelsService from 'platform/api/services/resource-label';
 import * as Kefir from 'kefir';
 import { Rdf } from 'platform/api/rdf';
-import { SemanticSearchContext } from '../search';
 import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
+import * as SparqlJs from 'sparqljs';
+import { Extent } from 'ol/interaction';
 
 /**
  * Component to trigger the download of a SPARQL result set.
@@ -63,11 +64,12 @@ export interface SparqlDownloadComponentProps {
   context: any;
   queryExtension?: string;
   columnHeaders?: { variable: string; columnName: string}[];
+  extendVariables?: { name: string; type: string }[];
 }
 
 class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {}> {
   private subscription: Kefir.Subscription;
-  private onSave = (event: React.SyntheticEvent<any>) => {
+  private onSave = async (event: React.SyntheticEvent<any>) => {
     event.preventDefault();
 
     const results = [];
@@ -76,7 +78,51 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
 
     const query = this.props.context.resultQuery.get()
 
-    if (this.props.queryExtension) {
+    if (this.props.extendVariables) {
+      const extendedResults: { [key: string]: { results: { bindings: { relation: { value: string }}[] }} } = {};
+      const streams = [];
+
+      for (const variable of this.props.extendVariables) {
+        const constantTerm = `?${variable.name} a ${variable.type}. ?${variable.name} ?relation ?individual.`;
+
+        const extendedQuery = `SELECT DISTINCT ?relation WHERE {
+          ${constantTerm}
+          FILTER(!isIRI(?individual) && !isBlank(?individual)).
+        }`
+
+        const stream = SparqlClient.sendSparqlQuery(extendedQuery, 'application/json', { context: this.context.semanticContext })
+          .onValue((res) => (extendedResults[variable.name] = JSON.parse(res)));
+        streams.push(stream);
+      }
+
+      await Kefir.merge(streams).toPromise()
+
+      const wherePattern = Object.entries(extendedResults).map(([key, value]) => {
+        const entries = [];
+        for (const item of value.results.bindings) {
+          const relation = item.relation.value;
+          let relationLabel = relation.split("#")[relation.split("#").length - 1];
+          relationLabel = relationLabel.split("/")[relationLabel.split("/").length - 1];
+
+          const individual = `?${key}_${relationLabel}`;
+          query.variables.push(individual)
+          entries.push(`OPTIONAL { FILTER(BOUND(?${key})). ?${key} <${relation}> ${individual}. }`);
+        }
+
+        return entries.join("\n");
+      }).join("\n");
+
+      const extraQueryRaw = `
+        SELECT * WHERE {
+          ${wherePattern}
+        }
+      `
+
+      const extraQuery = parseQuerySync(extraQueryRaw);
+      if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
+        query.where.push(...extraQuery.where)
+      }
+    } else if (this.props.queryExtension) {
       const extraQuery = parseQuerySync(this.props.queryExtension);
       if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
         extraQuery.variables.forEach(el => (query.variables.push(el)))
@@ -130,10 +176,12 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     const filteredFacets = this.props.context.selectedFacets.filter(f => this.props.rules.find(r => r.relation === f.relation.iri.value));
     if (this.props.rules && filteredFacets.every(f => f.values.length === 0)) return false;
 
-    return filteredFacets.every(f => {
-      const rule = this.props.rules.find(r => f.relation.iri.value === r.relation)!;
+    return this.props.rules.every(r => {
+      const facet = filteredFacets.find(f => f.relation.iri.value === r.relation);
 
-      return rule.min <= f.values.length && rule.max >= f.values.length;
+      if (!facet) return false;
+
+      return r.min <= facet.values.length && r.max >= facet.values.length;
     });
   }
 
