@@ -90,6 +90,7 @@
   "mp-user-language-switch": "platform/components/language-switch/UserLanguageSwitch.tsx",
 
   "mp-graph-store-action": "platform/components/admin/rdf-upload/GraphActionLink.ts",
+  "mp-multiple-graph-download": "platform/components/admin/rdf-upload/MultipleGraphDownloadLink.ts",
   "mp-rdf-upload": "platform/components/admin/rdf-upload/RdfUpload.tsx",
   "mp-file-upload": "platform/components/admin/file-upload/FileUpload.tsx",
   "mp-app-upload": "platform/components/admin/app-upload/AppUpload.tsx",

@@ -39,7 +39,6 @@ const Button = createFactory(ReactBootstrap.Button);
 const ButtonToolbar = createFactory(ReactBootstrap.ButtonToolbar);
 
 import './GraphActionLink.scss';
-import { overlayMode } from 'codemirror';
 
 const CLASS = 'mp-rdf-graph-action';
 
@@ -113,7 +112,7 @@ export class GraphActionLink extends Component<Props, State> {
           ),
         })
       );
-    } else if (this.props.action === 'DELETE CUSTOM') {   
+    } else if (this.props.action === 'DELETE CUSTOM') {
         if (!this.props.eventOverlayId) {
           /* When there is no id set for the modal dialog, skip creating a modal window and run the delete */
           this.deleteGraphWithoutRefresh();
@@ -125,7 +124,7 @@ export class GraphActionLink extends Component<Props, State> {
               onHide();
               this.deleteGraphWithoutRefresh();
             };
-            
+
             getOverlaySystem().show(
               dialogRef,
               createElement(OverlayDialog, {
@@ -164,7 +163,7 @@ export class GraphActionLink extends Component<Props, State> {
         fileName,
         repository,
       }).onValue((v) => {});
-    } else if (this.props.action === 'UPDATE') { 
+    } else if (this.props.action === 'UPDATE') {
         this.updateGraph();
     }
   };
