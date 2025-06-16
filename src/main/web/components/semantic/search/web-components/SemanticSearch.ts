@@ -54,6 +54,7 @@ interface State {
   searchProfileStore?: Data.Maybe<SearchProfileStore>;
   hasFacet?: boolean;
   selectedFacets?: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>;
+  rules?: Array<{ relation: string; min: number; max: number; message: string }>;
   resultsLoaded?: boolean;
   resultState?: { [componentId: string]: object };
   availableDatasets?: Array<Dataset>;
@@ -106,6 +107,7 @@ export class SemanticSearch extends Component<Props, State> {
       }>(),
       hasFacet: false,
       selectedFacets: [],
+      rules: [],
       resultState: {},
       availableDatasets: availableDatasets,
       selectedDatasets: this.getDefaultDatasets(availableDatasets),
@@ -121,6 +123,8 @@ export class SemanticSearch extends Component<Props, State> {
     return {
       baseQuery: this.state.baseQuery,
       useInExtendedFcFrSearch: this.useInExtendedFcFrSearch,
+      rules: this.state.rules,
+      setRules: this.setRules,
       extendedSearch: this.state.extendedSearch,
       baseQueryStructure: this.state.baseQueryStructure,
       resultsStatus: { loaded: this.state.resultsLoaded, count: this.resultCount },
@@ -236,6 +240,7 @@ export class SemanticSearch extends Component<Props, State> {
           resultQuery: query,
           resultsLoaded: false,
           selectedFacets: [],
+          rules: [],
           isConfigurationEditable: query.isJust ? false : true,
         };
       }
@@ -294,6 +299,10 @@ export class SemanticSearch extends Component<Props, State> {
 
   private setSelectedFacets = (facets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>) => {
     this.setState({ selectedFacets: facets });
+  };
+
+  private setRules = (rules: Array<{ relation: string; min: number; max: number; message: string }>) => {
+    this.setState({ rules: rules });
   };
 
   private setFacetActions = (actions: FacetModel.Actions) => {

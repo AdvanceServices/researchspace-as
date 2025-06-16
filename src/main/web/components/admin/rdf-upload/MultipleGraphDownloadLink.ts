@@ -17,34 +17,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { Props as ReactProps, createElement, createFactory } from 'react';
+import { Props as ReactProps, createElement } from 'react';
 import * as D from 'react-dom-factories';
 import { startsWith, endsWith } from 'lodash';
 import * as moment from 'moment';
 import * as classnames from 'classnames';
-import * as ReactBootstrap from 'react-bootstrap';
 import * as Kefir from 'kefir';
 
 import { Component } from 'platform/api/components';
 import { Rdf } from 'platform/api/rdf';
-import { refresh } from 'platform/api/navigation';
 import { SparqlUtil } from 'platform/api/sparql';
 import { RDFGraphStoreService } from 'platform/api/services/rdf-graph-store';
-import { addNotification } from 'platform/components/ui/notification';
-import { Spinner } from 'platform/components/ui/spinner';
-import { getOverlaySystem, OverlayDialog } from 'platform/components/ui/overlay';
-import * as GraphActionEvents from './GraphActionEvents';
-import { trigger } from 'platform/api/events';
-
-const Button = createFactory(ReactBootstrap.Button);
-const ButtonToolbar = createFactory(ReactBootstrap.ButtonToolbar);
 
 import './GraphActionLink.scss';
+import { Spinner } from 'platform/components/ui/spinner';
 
 const CLASS = 'mp-rdf-graph-action';
 
 export interface Props extends ReactProps<GraphActionLink> {
-  graphuris: string[];
+  graphuris: string | string[];
   fileEnding?: string;
   className?: string;
   graphDescription?: string;
@@ -84,22 +75,26 @@ export class GraphActionLink extends Component<Props, State> {
     }
 
     const { repository } = this.context.semanticContext;
+
+    const graphuris = typeof this.props.graphuris === "string" ? this.props.graphuris.split(",") : this.props.graphuris;
     const acceptHeader = SparqlUtil.getMimeType(this.props.fileEnding);
     const ending =
-      this.props.fileEnding && endsWith(this.props.graphuris[0], this.props.fileEnding) ? '' : this.props.fileEnding;
-    const fileName = startsWith(this.props.graphuris[0], 'file:///')
-      ? this.props.graphuris[0].replace('file:///', '') + ending
+      this.props.fileEnding && endsWith(graphuris[0], this.props.fileEnding) ? '' : this.props.fileEnding;
+    const fileName = startsWith(graphuris[0], 'file:///')
+      ? graphuris[0].replace('file:///', '') + ending
       : 'graph-export-' + moment().format('YYYY-MM-DDTHH-mm-ss') + '.' + ending;
 
     const graphs = [];
     const streams = [];
 
-    for (const graphuri of this.props.graphuris) {
+    for (let i = 0; i < graphuris.length; i++) {
+      const graphuri = graphuris[i]
       const stream = RDFGraphStoreService.downloadGraphText({
         targetGraph: Rdf.iri(graphuri),
         acceptHeader,
         fileName,
         repository,
+        merge: i !== 0,
       }).onValue((v) => { graphs.push(v) });
       streams.push(stream);
     }

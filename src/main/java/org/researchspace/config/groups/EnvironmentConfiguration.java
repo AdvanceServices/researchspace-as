@@ -90,12 +90,17 @@ public class EnvironmentConfiguration extends ConfigurationGroupBase {
         return getStringList("pathsToRewrite", Lists.newArrayList());
     }
 
+    @ConfigurationParameter
+    public List<String> getExportableNamespacePrefixes() {
+        return getStringList("exportableNamespacePrefixes", Lists.newArrayList());
+    }
+
     /**************************** AUTHENTICATION ******************************/
 
     /**
      * If specified, all security configuration files will be loaded from specified
      * storage.
-     * 
+     *
      * @see #getSecurityConfig(SecurityConfigType)
      */
     @ConfigurationParameter

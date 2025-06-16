@@ -211,7 +211,7 @@ export class DirectFileUploader extends Component<DirectFileUploaderProps, Direc
       file: file,
       path: {
         ...path,
-        name: file.name,
+        name: file.name.replace(" ", "_"),
       },
     });
   }

@@ -20,12 +20,14 @@ import * as React from 'react';
 import { ReactElement, ReactChild, ComponentClass, Component, Children } from 'react';
 import * as _ from 'lodash';
 import { Panel as BootstrapPanel, PanelProps as BootstrapPanelProps } from 'react-bootstrap';
+import { ComponentTemplateUpdate } from 'platform/api/events/BuiltInEvents';
 
 export interface PanelProps extends BootstrapPanelProps {}
 
 import { PanelHeader } from './PanelHeader';
 import { PanelFooter } from './PanelFooter';
 import { PanelBody } from './PanelBody';
+import { listen } from 'platform/api/events';
 
 /**
  * Wrapper for react-bootstrap Panel component with custom header and footer templates.
@@ -43,15 +45,27 @@ import { PanelBody } from './PanelBody';
  *    </mp-panel-footer>
  *  </mp-panel>
  */
-export class Panel extends Component<PanelProps, {}> {
+export class Panel extends Component<PanelProps, {expanded: boolean}> {
+  constructor(props: PanelProps) {
+    super(props);
+    this.state = {
+      expanded: false,
+    }
+  }
+
   render() {
     const children = Children.toArray(this.props.children);
     const header = this.findComponent(children, PanelHeader);
     const body = this.findComponent(children, PanelBody);
     const footer = this.findComponent(children, PanelFooter);
 
+    listen({ eventType: ComponentTemplateUpdate, target: this.props.id })
+      .onValue(() => {
+        this.setState({ expanded: true })
+      })
+
     return (
-      <BootstrapPanel {...this.props} header={header} footer={footer}>
+      <BootstrapPanel {...this.props} expanded={this.state.expanded} header={header} onClick={() => this.setState(prev => ({ expanded: !prev.expanded}))} footer={footer}>
         {body}
       </BootstrapPanel>
     );

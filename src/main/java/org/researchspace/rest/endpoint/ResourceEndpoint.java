@@ -140,7 +140,7 @@ public class ResourceEndpoint {
     /**
      * Do content negotiation like in SparqlServlet and return sparql describe
      * result
-     * 
+     *
      * @param httpServletRequest
      * @param uri
      * @return

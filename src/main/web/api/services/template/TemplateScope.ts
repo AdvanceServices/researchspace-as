@@ -106,6 +106,19 @@ export class TemplateScope {
       }
       this.handlebars.registerHelper(helperId, helpers[helperId]);
     }
+    this.handlebars.registerHelper("bindingsToArray", function (bindings: object[]) {
+      const arr = [];
+
+      for (const binding of bindings) {
+        for (const value of Object.values(binding)) {
+          if (value && value.value && !arr.includes(value.value)) {
+            arr.push(value.value);
+          }
+        }
+      }
+
+      return arr;
+    });
 
     this.partials = partials || new Map<string, ParsedTemplate>();
     this.partials.forEach((body, id) => {

@@ -38,11 +38,13 @@ import { Actions } from 'platform/components/semantic/search/data/facet/Model';
 import { SearchFacetCategorySelected } from '../query-builder/SearchEvents';
 
 import './Facet.scss';
+import { FacetContext } from 'platform/components/semantic/search/web-components/SemanticSearchApi';
+import SemanticContext from 'platform/api/components/SemanticContext';
 
 export interface FacetProps {
   data: FacetData;
   actions: Actions;
-  config: SemanticFacetConfig;
+  config: SemanticFacetConfig & { context: FacetContext & SemanticContext };
 }
 
 export class FacetComponent extends Component<FacetProps, {}> {

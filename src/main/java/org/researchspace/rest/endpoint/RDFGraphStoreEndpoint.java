@@ -30,6 +30,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +38,7 @@ import java.util.Set;
 import javax.inject.Inject;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.NotNull;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HEAD;
@@ -76,6 +78,7 @@ import org.eclipse.rdf4j.rio.RDFWriter;
 import org.eclipse.rdf4j.rio.RDFWriterFactory;
 import org.eclipse.rdf4j.rio.RDFWriterRegistry;
 import org.eclipse.rdf4j.rio.Rio;
+import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.hibernate.graph.Graph;
 import org.researchspace.api.sparql.ServletRequestUtil;
 import org.researchspace.config.Configuration;
@@ -213,7 +216,7 @@ public class RDFGraphStoreEndpoint {
     @RequiresAuthentication
     @RequiresPermissions(SPARQL.GRAPH_STORE_GET)
     public Response getGraph(final @NotNull @QueryParam("graph") IRI uri,
-            @QueryParam("repository") Optional<String> repository) throws Exception {
+        @QueryParam("repository") Optional<String> repository, @QueryParam("merge") Optional<Boolean> merge) throws Exception {
 
         if (logger.isTraceEnabled())
             logger.trace("Request to return GRAPH: " + uri);
@@ -245,10 +248,18 @@ public class RDFGraphStoreEndpoint {
                                 uri)) {
                             RDFWriter writer = factory.getWriter(os);
                             writer.startRDF();
-                            for (Map.Entry<String, String> entry : ns.getPrefixMap().entrySet()) {
-                                String prefix = entry.getKey();
-                                String namespace = entry.getValue();
-                                writer.handleNamespace(prefix, namespace);
+                            List<String> exportablePrefixes = config.getEnvironmentConfig().getExportableNamespacePrefixes();
+                            if (merge.isEmpty() || (merge.isPresent() && !merge.get())) {
+                                for (Map.Entry<String, String> entry : ns.getPrefixMap().entrySet()) {
+                                    String prefix = entry.getKey();
+
+                                    if (!exportablePrefixes.contains(prefix)) {
+                                        continue;
+                                    }
+
+                                    String namespace = entry.getValue();
+                                    writer.handleNamespace(prefix, namespace);
+                                }
                             }
                             if (useQuads) {
                                 while (repositoryResult.hasNext()) {

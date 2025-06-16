@@ -28,7 +28,8 @@ import * as Kefir from 'kefir';
 import { Rdf } from 'platform/api/rdf';
 import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
 import * as SparqlJs from 'sparqljs';
-import { Extent } from 'ol/interaction';
+import { trigger } from 'platform/api/events';
+import { ComponentTemplateUpdate } from 'platform/api/events/BuiltInEvents';
 
 /**
  * Component to trigger the download of a SPARQL result set.
@@ -60,11 +61,13 @@ export interface SparqlDownloadComponentProps {
    * In case filename is provided, downloadResourceIri will be ignored
    */
   downloadResourceIri?: string;
-  rules: { relation: string; min: number; max: number; message: string}[];
+  rules: { relation: string; min: number; max: number; message: string }[];
   context: any;
   queryExtension?: string;
-  columnHeaders?: { variable: string; columnName: string}[];
-  extendVariables?: { name: string; type: string }[];
+  columnHeaders?: { variable: string; columnName: string }[];
+  extendVariables?: { name: string; type: string; preQuery?: string }[];
+  excludeRelations?: string[];
+  target?: string;
 }
 
 class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {}> {
@@ -73,61 +76,71 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     event.preventDefault();
 
     const results = [];
-    const {downloadResourceIri, filename} = this.props
-    const FALLBACK_FILENAME = 'file.csv'
+    const { downloadResourceIri, filename } = this.props;
+    const FALLBACK_FILENAME = 'file.csv';
 
-    const query = this.props.context.resultQuery.get()
+    const originalQuery: SparqlJs.SelectQuery = this.props.context.resultQuery.get();
+    const generator = new SparqlJs.Generator();
+    const query: SparqlJs.SelectQuery = parseQuerySync(generator.stringify(originalQuery));
 
     if (this.props.extendVariables) {
-      const extendedResults: { [key: string]: { results: { bindings: { relation: { value: string }}[] }} } = {};
+      const extendedResults: { [key: string]: { results: { bindings: { relation: { value: string } }[] } } } = {};
       const streams = [];
 
       for (const variable of this.props.extendVariables) {
-        const constantTerm = `?${variable.name} a ${variable.type}. ?${variable.name} ?relation ?individual.`;
+        const constantTerm = `${variable.preQuery ?? "" } ?${variable.name} a ${variable.type}. ?${variable.name} ?relation ?individual.`;
+        const filterRelations = !this.props.excludeRelations
+          ? ''
+          : this.props.excludeRelations.map((relation) => `FILTER (?relation != ${relation})`).join('\n');
 
         const extendedQuery = `SELECT DISTINCT ?relation WHERE {
           ${constantTerm}
+          ${filterRelations}
           FILTER(!isIRI(?individual) && !isBlank(?individual)).
-        }`
+        }`;
 
-        const stream = SparqlClient.sendSparqlQuery(extendedQuery, 'application/json', { context: this.context.semanticContext })
-          .onValue((res) => (extendedResults[variable.name] = JSON.parse(res)));
+        const stream = SparqlClient.sendSparqlQuery(extendedQuery, 'application/json', {
+          context: this.context.semanticContext,
+        }).onValue((res) => (extendedResults[variable.name] = JSON.parse(res)));
         streams.push(stream);
       }
 
-      await Kefir.merge(streams).toPromise()
+      await Kefir.merge(streams).toPromise();
 
-      const wherePattern = Object.entries(extendedResults).map(([key, value]) => {
-        const entries = [];
-        for (const item of value.results.bindings) {
-          const relation = item.relation.value;
-          let relationLabel = relation.split("#")[relation.split("#").length - 1];
-          relationLabel = relationLabel.split("/")[relationLabel.split("/").length - 1];
+      const wherePattern = Object.entries(extendedResults)
+        .map(([key, value]) => {
+          const entries = [];
+          for (const item of value.results.bindings) {
+            const relation = item.relation.value;
+            let relationLabel = relation.split('#')[relation.split('#').length - 1];
+            relationLabel = relationLabel.split('/')[relationLabel.split('/').length - 1];
 
-          const individual = `?${key}_${relationLabel}`;
-          query.variables.push(individual)
-          entries.push(`OPTIONAL { FILTER(BOUND(?${key})). ?${key} <${relation}> ${individual}. }`);
-        }
+            const individual = `?${relationLabel}`;
+            // @ts-ignore
+            query.variables.push(individual);
+            entries.push(`OPTIONAL { FILTER(BOUND(?${key})). ?${key} <${relation}> ${individual}. }`);
+          }
 
-        return entries.join("\n");
-      }).join("\n");
+          return entries.join('\n');
+        })
+        .join('\n');
 
       const extraQueryRaw = `
         SELECT * WHERE {
           ${wherePattern}
         }
-      `
+      `;
 
       const extraQuery = parseQuerySync(extraQueryRaw);
       if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
-        query.where.push(...extraQuery.where)
+        query.where.push(...extraQuery.where);
       }
     } else if (this.props.queryExtension) {
       const extraQuery = parseQuerySync(this.props.queryExtension);
       if (extraQuery.type === 'query' && extraQuery.queryType === 'SELECT') {
-        extraQuery.variables.forEach(el => (query.variables.push(el)))
+        extraQuery.variables.forEach((el) => query.variables.push(el));
 
-        query.where.push(...extraQuery.where)
+        query.where.push(...extraQuery.where);
       }
     }
 
@@ -141,43 +154,51 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
         for (const item of this.props.columnHeaders) {
           headers = headers.replace(`?${item.variable}`, item.columnName);
         }
+        headers = headers.replaceAll('?', '');
 
-        const blob = new Blob([headers + '\r\n' + results[0].split('\r\n').slice(1).join("\r\n")], { type: this.props.header });
+        const blob = new Blob([headers + '\r\n' + results[0].split('\r\n').slice(1).join('\r\n')], {
+          type: this.props.header,
+        });
 
-        if(!downloadResourceIri && !filename) {
+        if (!downloadResourceIri && !filename) {
           fileSaver.saveAs(blob, FALLBACK_FILENAME);
-          return
+          return;
         }
 
-        if(filename) {
+        if (filename) {
           fileSaver.saveAs(blob, filename || FALLBACK_FILENAME);
-          return
+          return;
         }
 
-        if(downloadResourceIri && !filename) {
+        if (downloadResourceIri && !filename) {
           const context = this.context.semanticContext;
           this.subscription = LabelsService.getLabel(Rdf.iri(downloadResourceIri), { context }).observe({
             value: (label) => fileSaver.saveAs(blob, label),
             error: () => fileSaver.saveAs(blob, FALLBACK_FILENAME),
           });
-          return
+          return;
         }
-
       });
   };
+
+  componentDidMount() {
+    this.props.context.setRules(this.props.rules);
+  }
 
   componentWillUnmount() {
     this.subscription.unsubscribe();
   }
 
   private areRulesSatisfied(): boolean {
-    if (!this.props.rules) return true
+    if (!this.props.rules) return true;
 
-    const filteredFacets = this.props.context.selectedFacets.filter(f => this.props.rules.find(r => r.relation === f.relation.iri.value));
-    if (this.props.rules && filteredFacets.every(f => f.values.length === 0)) return false;
+    const filteredFacets = this.props.context.selectedFacets.filter((f) =>
+      this.props.rules.find((r) => r.relation === f.relation.iri.value)
+    );
+    if (this.props.rules && filteredFacets.every((f) => f.values.length === 0)) return false;
 
-    return this.props.rules.every(r => {
-      const facet = filteredFacets.find(f => f.relation.iri.value === r.relation);
+    return this.props.rules.every((r) => {
+      const facet = filteredFacets.find((f) => f.relation.iri.value === r.relation);
 
       if (!facet) return false;
 
@@ -191,11 +212,30 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
     if (this.areRulesSatisfied()) {
       props['onClick'] = this.onSave;
     } else {
-      props['onClick'] = () => window.alert(this.props.rules.map(r => r.message).join("\n"));
+      props['onClick'] = () => {
+        window.alert(this.props.rules.map((r) => r.message).join('\n'));
+
+        const firstUnsatisfiedRule = this.props.rules.find(r => {
+          const facet = this.props.context.selectedFacets.find(f => f.relation.iri.value === r.relation);
+          if (!facet) return true;
+
+          return r.min > facet.values.length || r.max < facet.values.length;
+        })
+        this.props.context.facetActions.value.selectRelation(firstUnsatisfiedRule.relation);
+
+        if (this.props.target) {
+          trigger({
+            eventType: ComponentTemplateUpdate,
+            source: Math.random().toString(),
+            targets: [this.props.target],
+            data: {},
+          });
+        }
+      };
       props['style'] = {
         cursor: 'not-allowed',
         opacity: 0.5,
-      }
+      };
     }
 
     return cloneElement(child, props);

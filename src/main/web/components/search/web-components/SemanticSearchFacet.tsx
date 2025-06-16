@@ -169,6 +169,7 @@ class SemanticSearchFacetInner extends React.Component<InnerProps, State> {
           ? Facet({
               data: this.state.facetData,
               actions: this.facetStore.facetActions(),
+              // @ts-ignore
               config: this.props,
             })
           : null,

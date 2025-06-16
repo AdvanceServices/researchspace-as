@@ -99,7 +99,7 @@ public class MainTemplate {
 
         /**
          * Getter for the template context bean. See main.hbs
-         * 
+         *
          * @return whether platform is started in development modus
          */
         @SuppressWarnings("unused")

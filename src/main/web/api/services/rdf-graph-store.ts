@@ -216,15 +216,17 @@ class GraphStoreService {
     acceptHeader,
     fileName,
     repository,
+    merge,
   }: {
     targetGraph: Rdf.Iri;
     acceptHeader: SparqlUtil.ResultFormat;
     fileName: string;
     repository?: string;
+    merge?: boolean;
   }): Kefir.Property<string> {
     const req = request
       .get(GRAPH_STORE_SERVICEURL)
-      .query({ graph: targetGraph.value, repository: repository })
+      .query({ graph: targetGraph.value, repository: repository, merge: merge })
       .accept(acceptHeader);
 
     return Kefir.fromNodeCallback<string>((cb) => {

@@ -422,7 +422,7 @@ function attributeValue(name: string, val: string): any {
   if (decoded === 'true' || decoded === 'false') {
     return JSON.parse(decoded);
   } else if (decoded !== '' && !isNaN(+decoded)) {
-    // isNaN returns true for empty string, so we need to check for it 
+    // isNaN returns true for empty string, so we need to check for it
     // custom handling for number attributes
     return +decoded;
   } else {

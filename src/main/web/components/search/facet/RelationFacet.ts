@@ -45,12 +45,14 @@ import { FacetSlider, SliderRange } from './slider/FacetSlider';
 import { Literal, NumericRange, DateRange } from 'platform/components/semantic/search/data/search/Model';
 import { SemanticFacetConfig } from 'platform/components/semantic/search/config/SearchConfig';
 import { SearchFacetPropertySelected } from 'platform/components/search/query-builder/SearchEvents';
+import { SemanticContext } from 'platform/api/components';
+import { FacetContext } from 'platform/components/semantic/search/web-components/SemanticSearchApi';
 
 interface RelationFacetProps extends Props<RelationFacetComponent> {
   relation: Relation;
   data: FacetData;
   actions: F.Actions;
-  config: SemanticFacetConfig;
+  config: SemanticFacetConfig & { context: FacetContext & SemanticContext };
 }
 
 /**
@@ -76,9 +78,21 @@ export class RelationFacetComponent extends PureComponent<RelationFacetProps, Re
     return this.props.relation.available === true ? this.renderRelation() : null;
   }
 
-  private renderRelation = () =>
-    D.div(
-      { className: 'facet__relation' },
+  private renderRelation = () => {
+    const rule = this.props.config.context.rules?.find(r => r.relation === this.props.relation.iri.value)
+    const selectedFacet = this.props.config.context.selectedFacets.find(f => f.relation.iri.value === this.props.relation.iri.value)
+    let isSatisfied: boolean;
+    if (rule === undefined) {
+      isSatisfied = true;
+    } else {
+      isSatisfied = selectedFacet !== undefined && rule.min <= selectedFacet.values.length && rule.max >= selectedFacet.values.length
+    }
+
+    return (D.div(
+      { className: classnames({
+          'facet__relation': true,
+          'facet__rule_restricted': !isSatisfied
+        })},
       D.div(
         {
           className: 'facet__relation__header',
@@ -87,7 +101,7 @@ export class RelationFacetComponent extends PureComponent<RelationFacetProps, Re
         D.i({
           className: classnames({
             'facet__relation__header__icon--selected': this.isSelectedRelation(),
-            facet__relation__header__icon: !this.isSelectedRelation(),
+            'facet__relation__header__icon': !this.isSelectedRelation(),
           }),
         }),
         createElement(TemplateItem, {
@@ -101,7 +115,8 @@ export class RelationFacetComponent extends PureComponent<RelationFacetProps, Re
       this.isSelectedRelation() && !this.props.data.viewState.values.loading
         ? D.div({ className: 'facet__relation__body' }, this.renderRelationFacetBody(this.props.data.viewState))
         : D.div({})
-    );
+    ));
+  }
 
   private isSelectedRelation = () =>
     this.props.data.viewState.relation.map((res) => res.iri.equals(this.props.relation.iri)).getOrElse(false);

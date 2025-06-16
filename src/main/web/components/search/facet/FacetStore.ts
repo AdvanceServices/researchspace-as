@@ -457,8 +457,18 @@ export class FacetStore {
     this.toggleCategoryAction(maybe.Nothing<Category>());
   };
 
-  private selectRelation = (relation: Relation) => {
-    this.toggleRelationAction(maybe.Just(relation));
+  private selectRelation = (relation: Relation | string) => {
+    if (typeof relation === 'string') {
+      this.relations.$property.onValue(val => {
+        val.toList().forEach(rel => {
+          if (rel.iri.value === relation) {
+            this.toggleRelationAction(maybe.Just(rel))
+          }
+        })
+      })
+    } else {
+      this.toggleRelationAction(maybe.Just(relation));
+    }
   };
 
   private deselectRelation = () => {

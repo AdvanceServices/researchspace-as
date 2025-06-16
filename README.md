@@ -321,7 +321,7 @@ cp src/main/resources/org/researchspace/apps/default/config/shiro.ini $DOCKER_FO
 **Build the image**
 
 ```
-cd $DOCKER_FOLDER/platform
+`cd $DOCKER_FOLDER/platform`
 docker build -t researchspace:VERSION_TAG .
 ```
 
