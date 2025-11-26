@@ -70,9 +70,17 @@ export interface SparqlDownloadComponentProps {
   target?: string;
 }
 
-class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {}> {
+class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentProps, {isLoading: boolean}> {
   private subscription: Kefir.Subscription;
+
+  constructor(props: SparqlDownloadComponentProps, context: any) {
+    super(props, context);
+    this.state = {
+      isLoading: false,
+    };
+  }
   private onSave = async (event: React.SyntheticEvent<any>) => {
+    this.setState({ isLoading: true });
     event.preventDefault();
 
     const results = [];
@@ -88,7 +96,9 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
       const streams = [];
 
       for (const variable of this.props.extendVariables) {
-        const constantTerm = `${variable.preQuery ?? "" } ?${variable.name} a ${variable.type}. ?${variable.name} ?relation ?individual.`;
+        const constantTerm = `${variable.preQuery ?? ''} ?${variable.name} a ${variable.type}. ?${
+          variable.name
+        } ?relation ?individual.`;
         const filterRelations = !this.props.excludeRelations
           ? ''
           : this.props.excludeRelations.map((relation) => `FILTER (?relation != ${relation})`).join('\n');
@@ -149,6 +159,7 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
         results.push(response);
       })
       .onEnd(() => {
+        this.setState({ isLoading: false });
         let headers = results[0].split('\r\n')[0];
 
         for (const item of this.props.columnHeaders) {
@@ -192,12 +203,16 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
   private areRulesSatisfied(): boolean {
     if (!this.props.rules) return true;
 
-    const filteredFacets = this.props.context.selectedFacets.filter((f) =>
-      this.props.rules.find((r) => r.relation === f.relation.iri.value)
-    );
-    if (this.props.rules && filteredFacets.every((f) => f.values.length === 0)) return false;
+    const relationsToIgnore =
+      this.props.context.facetRelations?.value?.filter((r) => !r.available).map((r) => r.iri.value) || [];
+    const effectiveRules = this.props.rules.filter((r) => !relationsToIgnore.includes(r.relation));
 
-    return this.props.rules.every((r) => {
+    const filteredFacets = this.props.context.selectedFacets.filter((f) =>
+      effectiveRules.find((r) => r.relation === f.relation.iri.value)
+    );
+    if (effectiveRules.length > 0 && filteredFacets.every((f) => f.values.length === 0)) return false;
+
+    return effectiveRules.every((r) => {
       const facet = filteredFacets.find((f) => f.relation.iri.value === r.relation);
 
       if (!facet) return false;
@@ -209,18 +224,24 @@ class SparqlDownloadContextComponent extends Component<SparqlDownloadComponentPr
   public render() {
     const child = Children.only(this.props.children) as ReactElement<any>;
     const props = {};
-    if (this.areRulesSatisfied()) {
+    if (this.state.isLoading) {
+      props['onClick'] = () => window.alert('Please wait, the download is in progress...');
+      props['style'] = {
+        cursor: 'wait',
+        opacity: 0.5,
+      };
+    } else if (this.areRulesSatisfied()) {
       props['onClick'] = this.onSave;
     } else {
       props['onClick'] = () => {
         window.alert(this.props.rules.map((r) => r.message).join('\n'));
 
-        const firstUnsatisfiedRule = this.props.rules.find(r => {
-          const facet = this.props.context.selectedFacets.find(f => f.relation.iri.value === r.relation);
+        const firstUnsatisfiedRule = this.props.rules.find((r) => {
+          const facet = this.props.context.selectedFacets.find((f) => f.relation.iri.value === r.relation);
           if (!facet) return true;
 
           return r.min > facet.values.length || r.max < facet.values.length;
-        })
+        });
         this.props.context.facetActions.value.selectRelation(firstUnsatisfiedRule.relation);
 
         if (this.props.target) {

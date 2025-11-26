@@ -70,12 +70,14 @@ export interface FacetContext extends BaseSearchContext {
   readonly baseQueryStructure: Data.Maybe<Model.Search>;
   readonly resultsStatus: { loaded: boolean; count: number | undefined };
   readonly facetStructure: Data.Maybe<FacetModel.Ast>;
+  readonly facetRelations: Data.Maybe<Model.Relations>;
   readonly facetActions: Data.Maybe<FacetModel.Actions>;
   readonly selectedFacets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>;
   readonly rules: Array<{ relation: string; min: number; max: number; message: string }>;
   setRules(rules: Array<{ relation: string; min: number; max: number; message: string }>): void;
   setSelectedFacets(facets: Array<{ relation: Model.Relation, values: Array<FacetModel.FacetValue>, defaultRange?: { begin: any, end: any } }>): void;
   setFacetStructure(structure: FacetModel.Ast): void;
+  setFacetRelations(relations: Model.Relations): void;
   setFacetedQuery(query: SparqlJs.SparqlQuery): void;
   setFacetActions(actions: FacetModel.Actions): void;
 }

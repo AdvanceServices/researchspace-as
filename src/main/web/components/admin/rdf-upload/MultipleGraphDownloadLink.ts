@@ -74,6 +74,7 @@ export class GraphActionLink extends Component<Props, State> {
       return;
     }
 
+    this.setState({ isInProcess: true });
     const { repository } = this.context.semanticContext;
 
     const graphuris = typeof this.props.graphuris === "string" ? this.props.graphuris.split(",") : this.props.graphuris;
@@ -84,22 +85,17 @@ export class GraphActionLink extends Component<Props, State> {
       ? graphuris[0].replace('file:///', '') + ending
       : 'graph-export-' + moment().format('YYYY-MM-DDTHH-mm-ss') + '.' + ending;
 
-    const graphs = [];
-    const streams = [];
-
-    for (let i = 0; i < graphuris.length; i++) {
-      const graphuri = graphuris[i]
-      const stream = RDFGraphStoreService.downloadGraphText({
-        targetGraph: Rdf.iri(graphuri),
-        acceptHeader,
-        fileName,
-        repository,
-        merge: i !== 0,
-      }).onValue((v) => { graphs.push(v) });
-      streams.push(stream);
-    }
-
-    Kefir.merge(streams).onEnd(() => RDFGraphStoreService.download(graphs.join("\n"), acceptHeader, fileName))
+    RDFGraphStoreService.downloadGraphTexts({
+      targetGraphs: graphuris.map(graphuri => Rdf.iri(graphuri)),
+      acceptHeader,
+      fileName,
+      repository,
+    }).onValue((v) => {
+      RDFGraphStoreService.download(v, acceptHeader, fileName);
+    })
+    .onAny(() => {
+      this.setState({ isInProcess: false });
+    });
   };
 }
 

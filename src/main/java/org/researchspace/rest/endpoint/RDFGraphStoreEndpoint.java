@@ -294,6 +294,94 @@ public class RDFGraphStoreEndpoint {
         }
     }
 
+    @GET
+    @Path("graphs")
+    @RequiresAuthentication
+    @RequiresPermissions(SPARQL.GRAPH_STORE_GET)
+    public Response getGraphs(final @NotNull @QueryParam("graphs") List<IRI> uris,
+        @QueryParam("repository") Optional<String> repository) throws Exception {
+
+        if (logger.isTraceEnabled())
+            logger.trace("Request to return GRAPH: " + uris);
+
+
+        for (IRI uri : uris) {
+            if (!graphExists(uri, repository))
+                return Response.serverError().status(Status.NOT_FOUND)
+                        .entity("NamedGraph " + uri + " does not exist or is empty.").build();
+        }
+
+        Optional<String> prefMime = getAcceptMIMEType(servletRequest);
+
+        if (!prefMime.isPresent()) {
+            return Response.serverError().status(Status.NOT_ACCEPTABLE).build();
+        }
+
+        String prefMimeType = prefMime.get();
+
+        RDFFormat format = Rio.getParserFormatForMIMEType(prefMimeType).orElse(RDFFormat.TURTLE);
+        boolean useQuads = (format == RDFFormat.TRIG) || (format == RDFFormat.TRIX) || (format == RDFFormat.NQUADS);
+
+        try {
+            final RDFWriterFactory factory = RDFWriterRegistry.getInstance().get(format)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Not able to instantiate RDFWriteFactory for format " + format.getName()));
+            StreamingOutput stream = new StreamingOutput() {
+                @Override
+                public void write(OutputStream os) throws IOException, WebApplicationException {
+                    try (RepositoryConnection con = getRepository(repository).getConnection()) {
+                        RDFWriter writer = factory.getWriter(os);
+                        writer.startRDF();
+                        for (int i = 0; i < uris.size(); i++) {
+                            IRI uri = uris.get(i);
+                            try (RepositoryResult<Statement> repositoryResult = con.getStatements(null, null, null, false,
+                                    uri)) {
+                                List<String> exportablePrefixes = config.getEnvironmentConfig().getExportableNamespacePrefixes();
+                                if (i == 0) {
+                                    for (Map.Entry<String, String> entry : ns.getPrefixMap().entrySet()) {
+                                        String prefix = entry.getKey();
+
+                                        if (!exportablePrefixes.contains(prefix)) {
+                                            continue;
+                                        }
+
+                                        String namespace = entry.getValue();
+                                        writer.handleNamespace(prefix, namespace);
+                                    }
+                                }
+                                if (useQuads) {
+                                    while (repositoryResult.hasNext()) {
+                                        Statement st = repositoryResult.next();
+                                        Statement st2 = SimpleValueFactory.getInstance().createStatement(st.getSubject(),
+                                                st.getPredicate(), st.getObject(), uri);
+                                        writer.handleStatement(st2);
+                                    }
+                                } else {
+                                    while (repositoryResult.hasNext()) {
+                                        writer.handleStatement(repositoryResult.next());
+                                    }
+                                }
+                            } catch (RDF4JException e) {
+                                logger.error("Failed to retrieve or write the requested graph \"{}\":", uri.stringValue(), e);
+                                // these are checked exceptions anyway
+                                throw e;
+                            }
+                        }
+                        writer.endRDF();
+                    }
+                }
+            };
+
+            return Response.ok(stream).header("content-disposition", "attachment; filename = graph-export-"
+                    + DateFormatUtils.ISO_DATETIME_FORMAT.format(new Date()) + "." + format.getDefaultFileExtension())
+                    .build();
+        } catch (Exception e) {
+            logger.error("Failed to return GRAPHS:" + e.getMessage());
+            logger.debug("Details:", e);
+            return Response.serverError().entity(e.getMessage()).build();
+        }
+    }
+
     @DELETE
     @RequiresAuthentication
     @RequiresPermissions(SPARQL.GRAPH_STORE_DELETE)

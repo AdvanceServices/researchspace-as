@@ -35,8 +35,8 @@ import { ControlledPropsHandler } from 'platform/components/utils';
 import { ErrorNotification } from 'platform/components/ui/notification';
 
 import { ColumnConfiguration, Table, TableConfig, TableLayout, TableColumnConfiguration } from './ServerSideTable';
-import { parseQuerySync } from 'platform/api/sparql/SparqlUtil';
-import { Pattern, BlockPattern } from 'sparqljs';
+import { parseQuerySync, serializeQuery } from 'platform/api/sparql/SparqlUtil';
+import { Pattern, SparqlQuery } from 'sparqljs';
 
 interface ControlledProps {
   /**
@@ -64,6 +64,9 @@ interface TableState {
   isLoading?: boolean;
   currentPage?: number;
   maxPage?: number;
+  pageSize: number;
+  totalRows?: number;
+  shouldLoadCounts: boolean;
   error?: any;
   filters: Filter[];
   searchQuery: string | null;
@@ -192,6 +195,7 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
 
   private readonly cancellation = new Cancellation();
   private querying = this.cancellation.derive();
+  private countQuerying = this.cancellation.derive();
 
   constructor(props: SemanticTableProps, context: ComponentContext) {
     super(props, context);
@@ -202,6 +206,8 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       maxPage: 0,
       queryDebounce: null,
       searchQuery: null,
+      pageSize: this.props.numberOfDisplayedRows ?? 10,
+      shouldLoadCounts: false,
     };
   }
 
@@ -218,7 +224,9 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       !_.isEqual(nextProps, this.props) ||
       nextState.currentPage !== this.state.currentPage ||
       nextState.searchQuery !== this.state.searchQuery ||
-      !_.isEqual(this.state.data, nextState.data)
+      !_.isEqual(this.state.data, nextState.data) ||
+      nextState.maxPage !== this.state.maxPage ||
+      nextState.pageSize !== this.state.pageSize
     );
   }
 
@@ -238,7 +246,10 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
   }
 
   componentDidUpdate(_prevProps, prevState) {
-    if (this.state.currentPage !== prevState.currentPage) {
+    if (this.state.shouldLoadCounts) {
+      this.updateDatasetAndPageCount(this.props, this.context);
+    }
+    if (this.state.currentPage !== prevState.currentPage || this.state.pageSize !== prevState.pageSize) {
       this.prepareConfigAndExecuteQuery(this.props, this.context);
     }
   }
@@ -313,7 +324,7 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       prefetchLabels: this.props.prefetchLabels,
     };
     layout = this.handleDeprecatedLayout(layout);
-    const { onControlledPropChange, ...otherProps } = this.props;
+    const { ...otherProps } = this.props;
     const controlledProps: Partial<TableConfig> = {
       currentPage: this.state.currentPage,
       onPageChange: (page) => {
@@ -326,7 +337,7 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       maxPage: this.state.maxPage,
       isLoading: this.state.isLoading,
       layout: maybe.fromNullable(layout),
-      numberOfDisplayedRows: maybe.fromNullable(this.props.numberOfDisplayedRows),
+      numberOfDisplayedRows: maybe.fromNullable(this.state.pageSize),
       data: Either.Right<any[], SparqlClient.SparqlSelectResult>(this.state.data),
       ref: this.TABLE_REF,
       filters: this.state.filters,
@@ -334,17 +345,16 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       handleSearchChange: (query: string) => this.handleSearchChange(query),
       handleFilterChange: (filter, variableType, variableName) =>
         this.handleFilterChange(filter, variableType, variableName),
+      handlePageSizeChange: (pageSize: number) => this.setState({ pageSize }),
+      totalRows: this.state.totalRows,
     });
   }
 
-  private prepareConfigAndExecuteQuery = (props: SemanticTableProps, context: ComponentContext) => {
-    this.setState({
-      isLoading: true,
-    });
+  private prepareQuery = (props: SemanticTableProps): SparqlQuery => {
     const parsedQuery = parseQuerySync(props.query);
     if (parsedQuery.type === 'query' && parsedQuery.queryType === 'SELECT') {
-      parsedQuery.limit = props.numberOfDisplayedRows ?? 10;
-      parsedQuery.offset = (props.numberOfDisplayedRows ?? 10) * (this.state.currentPage ?? 0);
+      parsedQuery.limit = this.state.pageSize ?? 10;
+      parsedQuery.offset = (this.state.pageSize ?? 10) * (this.state.currentPage ?? 0);
 
       if (this.state.searchQuery) {
         const searchTriples: Pattern = {
@@ -470,10 +480,39 @@ export class SemanticTable extends Component<SemanticTableProps, TableState> {
       }
     }
 
+    return parsedQuery;
+  }
+
+  private updateDatasetAndPageCount = (props: SemanticTableProps, context: ComponentContext) => {
+    if (!this.state.shouldLoadCounts) {
+      return;
+    }
+
+    const query = this.prepareQuery(props);
+    const staticCountQuery = "SELECT (COUNT(*) AS ?count) WHERE {}"
+    const parsedStaticCountQuery = parseQuerySync(staticCountQuery);
+
+    query.variables = parsedStaticCountQuery.variables;
+    query.limit = 1;
+
+    this.countQuerying = this.cancellation.deriveAndCancel(this.countQuerying);
+    this.countQuerying.map(SparqlClient.select(query, { context: context.semanticContext }))
+      .onValue(res => {
+        const count = parseInt(res.results.bindings[0].count.value);
+        this.setState({ totalRows: count, maxPage: Math.ceil(count / this.state.pageSize), shouldLoadCounts: false })
+      })
+  }
+
+  private prepareConfigAndExecuteQuery = (props: SemanticTableProps, context: ComponentContext) => {
+    this.setState({
+      isLoading: true,
+    });
+    const query = this.prepareQuery(props);
+
     this.querying = this.cancellation.deriveAndCancel(this.querying);
     const loading = this.querying
-      .map(SparqlClient.select(parsedQuery, { context: context.semanticContext }))
-      .onValue((res) => this.setState({ data: res, isLoading: false }))
+      .map(SparqlClient.select(query, { context: context.semanticContext }))
+      .onValue((res) => this.setState({ data: res, isLoading: false, shouldLoadCounts: true }))
       .onError((error) => this.setState({ isLoading: false, error }))
       .onEnd(() => {
         if (this.props.id) {

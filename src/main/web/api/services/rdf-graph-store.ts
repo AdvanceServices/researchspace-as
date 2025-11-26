@@ -236,6 +236,29 @@ class GraphStoreService {
     }).toProperty();
   }
 
+  public downloadGraphTexts({
+    targetGraphs,
+    acceptHeader,
+    fileName,
+    repository,
+  }: {
+    targetGraphs: Rdf.Iri[];
+    acceptHeader: SparqlUtil.ResultFormat;
+    fileName: string;
+    repository?: string;
+  }): Kefir.Property<string> {
+    const req = request
+      .get(GRAPH_STORE_SERVICEURL + "/graphs")
+      .query({ graphs: targetGraphs.map(i => i.value), repository: repository })
+      .accept(acceptHeader);
+
+    return Kefir.fromNodeCallback<string>((cb) => {
+      req.end((err, res: request.Response) => {
+        cb(this.errorToString(err), res.ok ? res.text : "");
+      })
+    }).toProperty();
+  }
+
   public download(response, header, filename): boolean {
     let blob = new Blob([response], { type: header });
     fileSaver.saveAs(blob, filename);

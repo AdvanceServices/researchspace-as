@@ -118,6 +118,8 @@ export interface TableConfig {
     variableType: 'uri' | 'literal',
     variableName: string
   ) => void;
+  handlePageSizeChange?: (pageSize: number) => void;
+  totalRows?: number;
 }
 
 export type TableProps = TableConfig & ClassAttributes<Table>;
@@ -215,6 +217,8 @@ export class Table extends Component<TableProps, State> {
     const paginationProps: CustomPaginationProps = {
       externalCurrentPage: config.currentPage,
       onPageChange: config.onPageChange,
+      totalRows: config.totalRows,
+      resultsPerPage: config.numberOfDisplayedRows.getOrElse(DEFAULT_ROWS_PER_PAGE),
     };
 
     const baseConfig: Partial<
@@ -242,8 +246,8 @@ export class Table extends Component<TableProps, State> {
       customFilterer: makeCellFilterer(renderingState),
       useExternal: true,
       externalCurrentPage: config.currentPage ?? 0,
-      externalMaxPage: 9999,
-      externalSetPageSize: () => null,
+      externalMaxPage: config.maxPage,
+      externalSetPageSize: (pageSize) => config.handlePageSizeChange(pageSize),
       // externalSetFilter: (searchFilter: string) => config.handleSearchChange(searchFilter),
       externalSetFilter: () => null,
       externalChangeSort: () => null,
@@ -289,7 +293,11 @@ export class Table extends Component<TableProps, State> {
     } else if (buffer.loading || !griddleConfig) {
       return createElement(Spinner, {});
     } else {
-      return createElement(CustomGriddle, { griddleProps: griddleConfig, onSearchChange: this.props.handleSearchChange, searchQuery: this.props.searchQuery });
+      return createElement(CustomGriddle, {
+        griddleProps: griddleConfig as Griddle.GriddleConfig,
+        onSearchChange: this.props.handleSearchChange,
+        searchQuery: this.props.searchQuery
+      });
     }
   }
 

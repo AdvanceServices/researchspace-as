@@ -49,6 +49,7 @@ interface State {
   baseQueryStructure?: Data.Maybe<Model.Search>;
   facetStructure?: FacetModel.Ast;
   facetActions?: FacetModel.Actions;
+  facetRelations?: Model.Relations;
   extendedSearch?: Data.Maybe<{ value: ExtendedSearchValue; range: Model.Category }>;
   resultQuery?: Data.Maybe<SparqlJs.SelectQuery>;
   searchProfileStore?: Data.Maybe<SearchProfileStore>;
@@ -130,6 +131,7 @@ export class SemanticSearch extends Component<Props, State> {
       resultsStatus: { loaded: this.state.resultsLoaded, count: this.resultCount },
       facetStructure: Maybe.fromNullable(this.state.facetStructure),
       facetActions: Maybe.fromNullable(this.state.facetActions),
+      facetRelations: Maybe.fromNullable(this.state.facetRelations),
       selectedFacets: this.state.selectedFacets,
       setSelectedFacets: this.setSelectedFacets,
       baseConfig: this.props,
@@ -141,6 +143,7 @@ export class SemanticSearch extends Component<Props, State> {
       setBaseQueryStructure: this.setBaseQueryStructure,
       setSearchProfileStore: this.setSearchProfileStore,
       setFacetStructure: this.setFacetStructure,
+      setFacetRelations: this.setFacetRelations,
       setFacetedQuery: this.setFacetedQuery,
       setFacetActions: this.setFacetActions,
       resultQuery: this.state.resultQuery,
@@ -286,6 +289,11 @@ export class SemanticSearch extends Component<Props, State> {
       alignment: this.state.selectedAlignment,
       graphScopeSearch: this.state.graphScopeStructure,
     });
+  };
+
+  private setFacetRelations = (facetRelations: Model.Relations) => {
+    const facetRelationsCopy = _.cloneDeep(facetRelations);
+    this.setState({ facetRelations: facetRelationsCopy });
   };
 
   private setFacetedQuery = (query: SparqlJs.SelectQuery) => {

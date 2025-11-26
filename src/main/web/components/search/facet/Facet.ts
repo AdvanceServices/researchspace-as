@@ -40,6 +40,7 @@ import { SearchFacetCategorySelected } from '../query-builder/SearchEvents';
 import './Facet.scss';
 import { FacetContext } from 'platform/components/semantic/search/web-components/SemanticSearchApi';
 import SemanticContext from 'platform/api/components/SemanticContext';
+import * as moment from 'moment';
 
 export interface FacetProps {
   data: FacetData;
@@ -73,26 +74,28 @@ export class FacetComponent extends Component<FacetProps, {}> {
   private resetFilters() {
     const values = this.props.data.selectedFacets.values();
     while (values) {
-      const v = values.next().value
+      const v = values.next().value;
 
       if (!v) {
-        break
+        break;
       }
 
-      if ("defaultRange" in v) {
+      if ('defaultRange' in v) {
         const f = this.props.actions.selectFacetValue(v.relation);
+        const begin = v.defaultRange.begin;
+        const end = moment(v.defaultRange.end).add(1, 'y');
         try {
-          f(v.defaultRange)
+          f({ begin, end });
         } catch (e) {
-          continue
+          continue;
         }
       } else {
         const f = this.props.actions.deselectFacetValue(v.relation);
         for (const selected of v.values) {
           try {
-            f(selected)
+            f(selected);
           } catch (e) {
-            continue
+            continue;
           }
         }
       }
@@ -116,7 +119,7 @@ export class FacetComponent extends Component<FacetProps, {}> {
           })
         )
         .toArray(),
-      D.button({ className: "facet-reset-button", onClick: () => this.resetFilters() }, "Reset Filters"),
+      D.button({ className: 'facet-reset-button', onClick: () => this.resetFilters() }, 'Reset Filters')
     );
   }
 

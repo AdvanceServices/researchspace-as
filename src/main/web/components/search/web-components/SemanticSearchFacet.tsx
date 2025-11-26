@@ -154,6 +154,7 @@ class SemanticSearchFacetInner extends React.Component<InnerProps, State> {
       value: (facetData) => {
         this.setState({ facetData });
         this.props.context.setFacetStructure(facetData.ast);
+        this.props.context.setFacetRelations(facetData.relations);
       },
     });
 

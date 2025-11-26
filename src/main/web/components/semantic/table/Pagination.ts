@@ -31,6 +31,8 @@ interface GriddlePaginationProps {
 export interface CustomPaginationProps {
   externalCurrentPage?: number;
   onPageChange?: (newPage: number) => void;
+  totalRows?: number;
+  resultsPerPage?: number;
 }
 
 export type PaginationProps = GriddlePaginationProps & CustomPaginationProps;
@@ -77,39 +79,66 @@ export class Pagination extends Component<PaginationProps, {}> {
   }
 
   render() {
-    const previous = D.li(
-      {
-        className: this.props.currentPage == 0 ? 'disabled' : '',
-      },
-      D.a(
+    if (this.props.maxPage > 1) {
+      const previous = D.li(
         {
-          onClick: this.props.previous,
+          className: this.props.currentPage == 0 ? 'disabled' : '',
         },
-        D.span({}, '\xAB')
-      )
-    );
-
-    const next = D.li(
-      {
-        className: this.props.currentPage == this.props.maxPage - 1 ? 'disabled' : '',
-      },
-      D.a(
-        {
-          onClick: this.props.next,
-        },
-        D.span({}, '\xBB')
-      )
-    );
-
-    const options = [
-      D.li(
+        D.a(
           {
-            className: 'active active-page',
+            onClick: this.props.previous,
           },
-          D.a({ 'data-value': this.props.currentPage, onClick: this.pageChange } as any, this.props.currentPage + 1)
+          D.span({}, '\xAB')
         )
-    ];
+      );
 
-    return D.nav({}, D.ul({ className: 'pagination' }, previous, options, next));
+      const next = D.li(
+        {
+          className: this.props.currentPage == this.props.maxPage - 1 ? 'disabled' : '',
+        },
+        D.a(
+          {
+            onClick: this.props.next,
+          },
+          D.span({}, '\xBB')
+        )
+      );
+
+      let startIndex = Math.max(this.props.currentPage - 5, 0);
+      const endIndex = Math.min(startIndex + 11, this.props.maxPage);
+
+      if (this.props.maxPage >= 11 && endIndex - startIndex <= 10) {
+        startIndex = endIndex - 11;
+      }
+
+      const options = [];
+      for (let i = startIndex; i < endIndex; i++) {
+        const selected = this.props.currentPage == i ? 'active' : '';
+        options.push(
+          D.li(
+            {
+              key: i,
+              className: selected,
+            },
+            D.a({ 'data-value': i, onClick: this.pageChange } as any, i + 1)
+          )
+        );
+      }
+
+      if (this.props.totalRows) {
+        const rowsDiv = D.div(
+          {
+            className: "total-rows-div"
+          },
+          `Elements from ${this.props.currentPage * this.props.resultsPerPage + 1} to ${(this.props.currentPage + 1) * this.props.resultsPerPage} on a total of ${new Intl.NumberFormat("de-DE").format(this.props.totalRows)}`
+        )
+
+        return D.div({}, rowsDiv, D.nav({}, D.ul({ className: 'pagination' }, previous, options, next)));
+      } else {
+        return D.nav({}, D.ul({ className: 'pagination' }, previous, options, next));
+      }
+    } else {
+      return D.nav({});
+    }
   }
 }

@@ -49,7 +49,7 @@ export class Panel extends Component<PanelProps, {expanded: boolean}> {
   constructor(props: PanelProps) {
     super(props);
     this.state = {
-      expanded: false,
+      expanded: this.props.defaultExpanded || false,
     }
   }
 
@@ -65,7 +65,14 @@ export class Panel extends Component<PanelProps, {expanded: boolean}> {
       })
 
     return (
-      <BootstrapPanel {...this.props} expanded={this.state.expanded} header={header} onClick={() => this.setState(prev => ({ expanded: !prev.expanded}))} footer={footer}>
+      <BootstrapPanel
+        {...this.props}
+        expanded={this.state.expanded}
+        header={header}
+        onSelect={() => !this.props.defaultExpanded && this.setState(prev => ({ expanded: !prev.expanded}))}
+        onClick={(event) =>  event.preventDefault()}
+        footer={footer}
+      >
         {body}
       </BootstrapPanel>
     );
