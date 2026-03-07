@@ -52,6 +52,7 @@ import com.google.inject.Inject;
 public class SPARQLBearerTokenAuthRepository extends SPARQLRepository {
 
     protected String authenticationToken;
+    protected String userAgent;
     @Inject(optional = true)
     protected SecretResolver secretResolver;
 
@@ -71,6 +72,10 @@ public class SPARQLBearerTokenAuthRepository extends SPARQLRepository {
         this.authenticationToken = authenticationToken;
     }
 
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
     @Override
     protected void initializeInternal() throws RepositoryException {
         // replace token with resolved secret (if applicable)
@@ -85,6 +90,9 @@ public class SPARQLBearerTokenAuthRepository extends SPARQLRepository {
 
         Map<String, String> httpHeaders = Maps.newHashMap();
         httpHeaders.put("Authorization", "Bearer " + getAuthenticationToken());
+        if (userAgent != null && !userAgent.trim().isEmpty()) {
+            httpHeaders.put("User-Agent", userAgent);
+        }
         client.setAdditionalHttpHeaders(httpHeaders);
 
         return client;

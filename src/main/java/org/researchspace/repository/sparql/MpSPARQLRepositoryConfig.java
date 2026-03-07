@@ -44,6 +44,7 @@ public class MpSPARQLRepositoryConfig extends SPARQLRepositoryConfig {
 
     private boolean usingQuads = true;
     private boolean writable = true;
+    private String userAgent;
 
     public MpSPARQLRepositoryConfig() {
         super();
@@ -75,11 +76,22 @@ public class MpSPARQLRepositoryConfig extends SPARQLRepositoryConfig {
         this.writable = writable;
     }
 
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
     @Override
     public Resource export(Model model) {
         Resource implNode = super.export(model);
         model.add(implNode, MpRepositoryVocabulary.QUAD_MODE, vf.createLiteral(usingQuads));
         model.add(implNode, MpRepositoryVocabulary.WRITABLE, vf.createLiteral(writable));
+        if (userAgent != null) {
+            model.add(implNode, MpRepositoryVocabulary.SPARQL_USER_AGENT, vf.createLiteral(userAgent));
+        }
         return implNode;
     }
 
@@ -92,6 +104,8 @@ public class MpSPARQLRepositoryConfig extends SPARQLRepositoryConfig {
                     .ifPresent(lit -> setUsingQuads(lit.booleanValue()));
             Models.objectLiteral(model.filter(implNode, MpRepositoryVocabulary.WRITABLE, null))
                     .ifPresent(lit -> setWritable(lit.booleanValue()));
+            Models.objectLiteral(model.filter(implNode, MpRepositoryVocabulary.SPARQL_USER_AGENT, null))
+                    .ifPresent(lit -> setUserAgent(lit.stringValue()));
         } catch (ModelException e) {
             throw new SailConfigException(e.getMessage(), e);
         }

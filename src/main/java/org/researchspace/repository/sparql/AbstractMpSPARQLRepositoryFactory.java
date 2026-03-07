@@ -24,6 +24,7 @@ import org.eclipse.rdf4j.repository.config.RepositoryConfigException;
 import org.eclipse.rdf4j.repository.config.RepositoryFactory;
 import org.eclipse.rdf4j.repository.config.RepositoryImplConfig;
 import org.eclipse.rdf4j.repository.sparql.SPARQLRepository;
+import org.researchspace.repository.sparql.bearertoken.SPARQLBearerTokenAuthRepository;
 
 /**
  * @author Andriy Nikolov <an@metaphacts.com>
@@ -36,6 +37,13 @@ public abstract class AbstractMpSPARQLRepositoryFactory implements RepositoryFac
 
     protected Repository processSPARQLRepositorySettings(SPARQLRepository repository, MpSPARQLRepositoryConfig config) {
         repository.enableQuadMode(config.isUsingQuads());
+        if (config.getUserAgent() != null && !config.getUserAgent().trim().isEmpty()) {
+            if (repository instanceof CustomSPARQLRepository) {
+                ((CustomSPARQLRepository) repository).setUserAgent(config.getUserAgent());
+            } else if (repository instanceof SPARQLBearerTokenAuthRepository) {
+                ((SPARQLBearerTokenAuthRepository) repository).setUserAgent(config.getUserAgent());
+            }
+        }
         return repository;
     }
 

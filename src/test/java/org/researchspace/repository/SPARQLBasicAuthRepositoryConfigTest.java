@@ -54,6 +54,7 @@ public class SPARQLBasicAuthRepositoryConfigTest {
     public ExpectedException exception = ExpectedException.none();
     private String sparqlRepositoryUrl = "https://query.wikidata.org/sparql";
     private String sparqlRepositoryUpdateUrl = "https://query.wikidata.org/sparql/update";
+    private String userAgent = "ResearchSpace-Test-Agent";
 
     @Test
     public void testNoUser() throws Exception {
@@ -106,6 +107,7 @@ public class SPARQLBasicAuthRepositoryConfigTest {
         SPARQLBasicAuthRepositoryConfig impl = ((SPARQLBasicAuthRepositoryConfig) config.getRepositoryImplConfig());
         assertEquals(sparqlRepositoryUrl, impl.getQueryEndpointUrl());
         assertEquals(sparqlRepositoryUpdateUrl, impl.getUpdateEndpointUrl());
+        assertEquals(userAgent, impl.getUserAgent());
         assertEquals("testuser", impl.getUsername());
         assertEquals("testpassword", impl.getPassword());
     }
@@ -117,6 +119,7 @@ public class SPARQLBasicAuthRepositoryConfigTest {
         SPARQLBasicAuthRepositoryConfig repImplConfig = new SPARQLBasicAuthRepositoryConfig();
         repImplConfig.setQueryEndpointUrl(sparqlRepositoryUrl);
         repImplConfig.setUpdateEndpointUrl(sparqlRepositoryUpdateUrl);
+        repImplConfig.setUserAgent(userAgent);
         repImplConfig.setUsername(username);
         repImplConfig.setPassword(password);
         repConfig.setRepositoryImplConfig(repImplConfig);

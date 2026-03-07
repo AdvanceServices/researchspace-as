@@ -17,11 +17,15 @@
 
 package org.researchspace.repository.sparql;
 
+import java.util.Map;
+
 import org.eclipse.rdf4j.http.client.SPARQLProtocolSession;
 import org.eclipse.rdf4j.query.resultio.TupleQueryResultFormat;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.rio.RDFFormat;
+
+import com.google.common.collect.Maps;
 
 /**
  * Override of the default rdf4j
@@ -44,6 +48,8 @@ public class CustomSPARQLRepository extends org.eclipse.rdf4j.repository.sparql.
      */
     private boolean isWritable;
 
+    private String userAgent;
+
     public CustomSPARQLRepository(String endpointUrl) {
         super(endpointUrl);
     }
@@ -60,6 +66,10 @@ public class CustomSPARQLRepository extends org.eclipse.rdf4j.repository.sparql.
 
     public void setWritable(boolean isWritable) {
         this.isWritable = isWritable;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
     }
 
     @Override
@@ -94,6 +104,13 @@ public class CustomSPARQLRepository extends org.eclipse.rdf4j.repository.sparql.
         // see https://github.com/eclipse/rdf4j/pull/1943
         session.setPreferredTupleQueryResultFormat(TupleQueryResultFormat.JSON);
         session.setPreferredRDFFormat(RDFFormat.TURTLE);
+
+        if (this.userAgent != null && !this.userAgent.trim().isEmpty()) {
+            Map<String, String> httpHeaders = Maps.newHashMap();
+            httpHeaders.put("User-Agent", this.userAgent);
+            session.setAdditionalHttpHeaders(httpHeaders);
+        }
+
         return session;
     }
 
